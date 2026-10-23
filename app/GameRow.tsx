@@ -13,7 +13,8 @@ function InjLine({ abbr, list }: { abbr: string; list: Injury[] }) {
   const out = list.filter((i) => i.status === "Out");
   const dtd = list.filter((i) => i.status !== "Out");
   const last = (n: string) => n.split(" ").filter((w) => !/^(Jr\.?|Sr\.?|II|III|IV|V)$/i.test(w)).slice(-1)[0] ?? n;
-  const names = (l: Injury[]) => l.slice(0, 3).map((i) => last(i.name)).join(", ") + (l.length > 3 ? ` +${l.length - 3}` : "");
+  const sorted = (l: Injury[]) => [...l].sort((a, b) => Number(b.key) - Number(a.key) || Number(b.mpg ?? 0) - Number(a.mpg ?? 0));
+  const names = (l: Injury[]) => sorted(l).slice(0, 3).map((i) => (i.key ? `${last(i.name)}★` : last(i.name))).join(", ") + (l.length > 3 ? ` +${l.length - 3}` : "");
   return (
     <div className="inj">
       <b>{abbr}</b>
@@ -70,7 +71,7 @@ export default function GameRow({ g, injuries = [] }: { g: Game; injuries?: Inju
         </div>
         {p && (mlPick ? (
           <span className="pick on">{mlPick} ML<small>+{pct(p.ml_edge, 1)} edge</small><Res r={p.ml_result} /></span>
-        ) : p.flags?.includes("ml") ? <span className="pick pass" title="Model and market disagree by more than the model can explain">CHECK NEWS</span> : p.market_ml_home != null ? <span className="pick pass">PASS</span> : null)}
+        ) : p.flags?.includes("ml-inj") ? <span className="pick pass" title="Withheld: a key player is out or questionable, and the model cannot see absences yet">INJURY HOLD</span> : p.flags?.includes("ml") ? <span className="pick pass" title="Model and market disagree by more than the model can explain">CHECK NEWS</span> : p.market_ml_home != null ? <span className="pick pass">PASS</span> : null)}
       </div>
 
       <div className="market">
@@ -80,7 +81,7 @@ export default function GameRow({ g, injuries = [] }: { g: Game; injuries?: Inju
         </div>
         {p && (spPick ? (
           <span className="pick on">{spPick}<small>{pct(p.spread_pick_prob)}</small><Res r={p.spread_result} /></span>
-        ) : p.flags?.includes("spread") ? <span className="pick pass" title="Model and market disagree by more than the model can explain">CHECK NEWS</span> : p.market_spread_home != null ? <span className="pick pass">PASS</span> : null)}
+        ) : p.flags?.includes("spread-inj") ? <span className="pick pass" title="Withheld: a key player is out or questionable, and the model cannot see absences yet">INJURY HOLD</span> : p.flags?.includes("spread") ? <span className="pick pass" title="Model and market disagree by more than the model can explain">CHECK NEWS</span> : p.market_spread_home != null ? <span className="pick pass">PASS</span> : null)}
       </div>
 
       <div className="market">
@@ -90,7 +91,7 @@ export default function GameRow({ g, injuries = [] }: { g: Game; injuries?: Inju
         </div>
         {p && (totPick ? (
           <span className="pick on">{totPick}<small>{pct(p.total_pick_prob)}</small><Res r={p.total_result} /></span>
-        ) : p.flags?.includes("total") ? <span className="pick pass" title="Model and market disagree by more than the model can explain">CHECK NEWS</span> : p.market_total != null ? <span className="pick pass">PASS</span> : null)}
+        ) : p.flags?.includes("total-inj") ? <span className="pick pass" title="Withheld: a key player is out or questionable, and the model cannot see absences yet">INJURY HOLD</span> : p.flags?.includes("total") ? <span className="pick pass" title="Model and market disagree by more than the model can explain">CHECK NEWS</span> : p.market_total != null ? <span className="pick pass">PASS</span> : null)}
       </div>
     </Link>
   );

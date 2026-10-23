@@ -55,7 +55,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
                 <tbody>
                   {[g.away, g.home].flatMap((t) => injuries.filter((i) => i.team_id === t.id).map((i) => (
                     <tr key={i.player_id}>
-                      <td>{i.name}{i.position ? <span className="muted"> · {i.position}</span> : null}{i.comment ? <div className="muted" style={{ fontSize: 12, fontFamily: "var(--font-body)", textTransform: "none", marginTop: 2 }}>{i.comment}</div> : null}</td>
+                      <td>{i.name}{i.key ? " ★" : ""}{i.position ? <span className="muted"> · {i.position}</span> : null}{i.mpg != null ? <span className="muted"> · {Number(i.mpg).toFixed(1)} min/g</span> : null}{i.comment ? <div className="muted" style={{ fontSize: 12, fontFamily: "var(--font-body)", textTransform: "none", marginTop: 2 }}>{i.comment}</div> : null}</td>
                       <td data-l="Team">{t.abbr}</td>
                       <td data-l="Status"><b className={i.status === "Out" ? "res loss" : "res push"} style={{ marginLeft: 0 }}>{i.status}</b></td>
                       <td data-l="Injury">{[i.side, i.injury_type, i.detail].filter((x) => x && x !== "Not Specified").join(" ") || "—"}</td>
@@ -66,7 +66,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
               </table>
             </div>
           )}
-          <p className="muted" style={{ fontSize: 13 }}>Source: ESPN injury report. v1 of the model does not adjust for injuries yet; picks on games with key absences deserve extra caution.</p>
+          <p className="muted" style={{ fontSize: 13 }}>★ = key player (28+ minutes and 15+ points a game). When a key player is newly out or questionable, Stakeman withholds picks on that team and overs in this game, because the ratings model cannot see the absence. Source: ESPN injury report and player stats.</p>
         </div>
       )}
       {!p && <div className="callout">No prediction for this game yet. Predictions are made for games within the next four days.</div>}
@@ -86,21 +86,21 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
                     <td className="num" data-l="Line">{g.away.abbr} {american(p.market_ml_away)} / {g.home.abbr} {american(p.market_ml_home)}</td>
                     <td className="num" data-l="Model view">Market implies {g.home.abbr} {pct(p.market_home_prob, 1)}</td>
                     <td className="num" data-l="Model probability">{g.home.abbr} {pct(p.home_win_prob, 1)}</td>
-                    <td data-l="Call">{p.ml_pick ? <b>{p.ml_pick === "home" ? g.home.abbr : g.away.abbr} ML · {pct(p.ml_edge, 1)} edge</b> : "Pass"}{p.ml_result ? ` · ${p.ml_result.toUpperCase()}` : ""}</td>
+                    <td data-l="Call">{p.ml_pick ? <b>{p.ml_pick === "home" ? g.home.abbr : g.away.abbr} ML · {pct(p.ml_edge, 1)} edge</b> : p.flags?.includes("ml-inj") ? "Injury hold" : "Pass"}{p.ml_result ? ` · ${p.ml_result.toUpperCase()}` : ""}</td>
                   </tr>
                   <tr>
                     <td>Spread</td>
                     <td className="num" data-l="Line">{g.home.abbr} {signed(p.market_spread_home)}</td>
                     <td className="num" data-l="Model view">{g.home.abbr} {signed(-Number(p.exp_margin))}</td>
                     <td className="num" data-l="Model probability">{g.home.abbr} covers {pct(p.home_cover_prob, 1)}</td>
-                    <td data-l="Call">{p.spread_pick ? <b>{p.spread_pick === "home" ? `${g.home.abbr} ${signed(p.spread_line)}` : `${g.away.abbr} ${signed(-Number(p.spread_line))}`}</b> : "Pass"}{p.spread_result ? ` · ${p.spread_result.toUpperCase()}` : ""}</td>
+                    <td data-l="Call">{p.spread_pick ? <b>{p.spread_pick === "home" ? `${g.home.abbr} ${signed(p.spread_line)}` : `${g.away.abbr} ${signed(-Number(p.spread_line))}`}</b> : p.flags?.includes("spread-inj") ? "Injury hold" : "Pass"}{p.spread_result ? ` · ${p.spread_result.toUpperCase()}` : ""}</td>
                   </tr>
                   <tr>
                     <td>Total</td>
                     <td className="num" data-l="Line">{p.market_total ?? "—"}</td>
                     <td className="num" data-l="Model view">{Number(p.exp_total).toFixed(1)} ({Number(p.exp_away_score).toFixed(0)}–{Number(p.exp_home_score).toFixed(0)})</td>
                     <td className="num" data-l="Model probability">Over {pct(p.over_prob, 1)}</td>
-                    <td data-l="Call">{p.total_pick ? <b>{p.total_pick === "over" ? "Over" : "Under"} {p.total_line}</b> : "Pass"}{p.total_result ? ` · ${p.total_result.toUpperCase()}` : ""}</td>
+                    <td data-l="Call">{p.total_pick ? <b>{p.total_pick === "over" ? "Over" : "Under"} {p.total_line}</b> : p.flags?.includes("total-inj") ? "Injury hold" : "Pass"}{p.total_result ? ` · ${p.total_result.toUpperCase()}` : ""}</td>
                   </tr>
                 </tbody>
               </table>

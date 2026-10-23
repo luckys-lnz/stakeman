@@ -4,7 +4,7 @@ const KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YXZlb3lldGJnY2ZyZ3pna3ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NTg0MzgsImV4cCI6MjEwODMzNDQzOH0.ntpBKplR8-IzKPlP5fLk6IWktRtiGZGk9u2wQXXmZfM";
 
-export const MODEL = "stakeman-elo-v1.1";
+export const MODEL = "stakeman-elo-v1.3";
 
 export async function q<T = any>(path: string, revalidate = 60): Promise<T> {
   const r = await fetch(`${URL_}/rest/v1/${path}`, {
@@ -63,6 +63,7 @@ export type Injury = {
   player_id: string; team_id: string; name: string; position: string | null; status: string;
   fantasy_status: string | null; injury_type: string | null; detail: string | null; location: string | null;
   side: string | null; return_date: string | null; comment: string | null; reported_at: string | null; captured_at: string;
+  mpg: number | null; ppg: number | null; key: boolean;
 };
 
 export async function injuriesFor(teamIds: string[]) {

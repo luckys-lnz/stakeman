@@ -3,7 +3,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const MODEL = "stakeman-elo-v1.1";
+const MODEL = "stakeman-elo-v1.3";
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
 const FIRST_SEASON = 2024; // ESPN season.year (2023-24) = warm-up season
 
@@ -15,6 +15,7 @@ type P = {
   k: number; hca: number; carry: number; ppe: number; alpha: number; pcarry: number; hpts: number;
   margin_sd: number; total_sd: number; ml_edge_min: number; ats_min_prob: number; total_min_prob: number;
   blend_w: number; max_ml_gap: number; max_spread_gap: number; max_total_gap: number;
+  key_mpg: number; key_ppg: number; hold_days: number;
 };
 
 // ---------- helpers ----------
@@ -116,6 +117,40 @@ async function ingest(query: string) {
   return { query, events: events.length, games: games.length, newOdds };
 }
 
+// ---------- player stats ----------
+const KEY_MPG = 28, KEY_PPG = 15;
+async function playerStats(ids: string[]) {
+  const out = new Map<string, { mpg: number | null; ppg: number | null }>();
+  if (!ids.length) return out;
+  const { data: cached } = await sb.from("player_stats").select("*").in("player_id", ids);
+  const fresh = Date.now() - 20 * 3600e3;
+  const stale: string[] = [];
+  for (const id of ids) {
+    const c = (cached ?? []).find((x: any) => x.player_id === id);
+    if (c && new Date(c.updated_at).getTime() > fresh) out.set(id, { mpg: c.mpg === null ? null : Number(c.mpg), ppg: c.ppg === null ? null : Number(c.ppg) });
+    else stale.push(id);
+  }
+  const rows: any[] = [];
+  for (let i = 0; i < stale.length; i += 10) {
+    await Promise.all(stale.slice(i, i + 10).map(async (id) => {
+      try {
+        const d = await fetchJson(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}/stats`);
+        const cat = (d.categories ?? []).find((c: any) => c.name === "averages");
+        const seasons = (cat?.statistics ?? []) as any[];
+        const iGp = cat?.names?.indexOf("gamesPlayed") ?? -1, iMin = cat?.names?.indexOf("avgMinutes") ?? -1, iPts = cat?.names?.indexOf("avgPoints") ?? -1;
+        // current season once a player has 3+ games, otherwise the most recent season with 10+ games
+        const pick = [...seasons].reverse().find((x, k) => Number(x.stats?.[iGp]) >= (k === 0 ? 3 : 10));
+        const row = { player_id: id, season: pick?.season?.year ?? null, gp: pick ? Number(pick.stats[iGp]) : null,
+          mpg: pick && iMin >= 0 ? Number(pick.stats[iMin]) : null, ppg: pick && iPts >= 0 ? Number(pick.stats[iPts]) : null,
+          updated_at: new Date().toISOString() };
+        rows.push(row); out.set(id, { mpg: row.mpg, ppg: row.ppg });
+      } catch { out.set(id, { mpg: null, ppg: null }); }
+    }));
+  }
+  if (rows.length) await sb.from("player_stats").upsert(rows);
+  return out;
+}
+
 // ---------- injuries ----------
 async function ingestInjuries() {
   const data = await fetchJson("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries");
@@ -143,6 +178,13 @@ async function ingestInjuries() {
   // de-dupe (a player can appear twice in rare feed glitches)
   const byId = new Map(rows.map((r) => [r.player_id, r]));
   const cur = [...byId.values()];
+  // minutes per game for each injured player (cached ~20h), used to mark key absences
+  const stats = await playerStats(cur.map((r) => r.player_id));
+  for (const r of cur) {
+    const st = stats.get(r.player_id);
+    r.mpg = st?.mpg ?? null; r.ppg = st?.ppg ?? null;
+    r.key = st?.mpg != null && st.mpg >= KEY_MPG && (st.ppg ?? 0) >= KEY_PPG;
+  }
   if (cur.length) {
     const { error } = await sb.from("injuries_current").upsert(cur);
     if (error) throw error;
@@ -230,6 +272,12 @@ async function model() {
 
   const { data: lockedRows } = await sb.from("predictions").select("game_id").eq("model_version", MODEL).eq("locked", true).in("game_id", upcoming.map((g: any) => g.id).concat(["-"]));
   const lockedSet = new Set((lockedRows ?? []).map((r: any) => r.game_id));
+  // teams missing a key player (Out or Day-To-Day): the ratings model can't see it, so it overrates them
+  // only fresh absences: long-term ones are already in the market price and the team's recent results
+  const holdSince = new Date(now.getTime() - (p.hold_days ?? 21) * 86400e3).toISOString();
+  const { data: keyInj } = await sb.from("injuries_current").select("team_id,name,status,mpg,ppg,reported_at")
+    .eq("key", true).gte("mpg", p.key_mpg ?? KEY_MPG).gte("ppg", p.key_ppg ?? KEY_PPG).gte("reported_at", holdSince);
+  const hurt = new Set((keyInj ?? []).map((r: any) => r.team_id));
   let predicted = 0;
   for (const g of upcoming) {
     if (lockedSet.has(g.id)) continue;
@@ -286,6 +334,14 @@ async function model() {
         else if (1 - ov >= p.total_min_prob) { row.total_pick = "under"; row.total_pick_prob = r4(1 - ov); }
       }
     }
+    // injury guard: withhold picks on a team missing a key player, and overs in that game
+    const hHurt = hurt.has(g.home_team_id), aHurt = hurt.has(g.away_team_id);
+    if (hHurt) flags.push("inj-home");
+    if (aHurt) flags.push("inj-away");
+    const blocked = (side: string | null) => (side === "home" && hHurt) || (side === "away" && aHurt);
+    if (blocked(row.ml_pick)) { row.ml_pick = null; row.ml_pick_prob = null; row.ml_edge = null; flags.push("ml-inj"); }
+    if (blocked(row.spread_pick)) { row.spread_pick = null; row.spread_pick_prob = null; flags.push("spread-inj"); }
+    if (row.total_pick === "over" && (hHurt || aHurt)) { row.total_pick = null; row.total_pick_prob = null; flags.push("total-inj"); }
     row.flags = flags;
     const { error } = await sb.from("predictions").upsert(row, { onConflict: "game_id,model_version" });
     if (error) throw error;
