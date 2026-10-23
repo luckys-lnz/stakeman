@@ -39,7 +39,7 @@ export default async function Record() {
   const name = { ml: "Moneyline", spread: "Spread", total: "Total" } as const;
   const fmtMonth = (k: string) => new Date(k + "-15").toLocaleDateString("en-US", { month: "short", year: "2-digit" });
   const betVerdict = betAll.n === 0 ? null
-    : betAll.u > 0 ? `Profitable in the backtest: ${units(betAll.u)} over ${betAll.n} picks (${(betAll.u / betAll.n * 100).toFixed(1)}% return per pick).`
+    : betAll.u > 0 ? `Profitable in the backtest: ${units(betAll.u)} over ${betAll.n} picks (${(betAll.u / betAll.n * 100).toFixed(1)}% return per pick). Not yet statistically proven: swings month to month are large, so expect losing stretches.`
     : `Not profitable in the backtest: ${units(betAll.u)} over ${betAll.n} picks (${(betAll.u / betAll.n * 100).toFixed(1)}% per pick). Treat picks as information, not a money-maker, until the live record says otherwise.`;
 
   return (
@@ -63,6 +63,7 @@ export default async function Record() {
               </div>
             ))}
           </div>
+          <p className="vnote">Totals were dropped in v1.4: the same test showed totals picks losing 32 units (−9.8% per bet) over 328 picks.</p>
           {det && <p className="vnote">Backtest: today&apos;s pick rules applied to {det.games_with_lines} past games ({det.from ? fmtMonth(det.from.slice(0, 7)) : ""}–{det.to ? fmtMonth(det.to.slice(0, 7)) : ""}) against DraftKings closing lines, 1 unit per pick, −110 on spreads and totals. Each game uses only information from before it. Injury holds aren&apos;t applied (no historical pre-game reports).</p>}
         </section>
       )}

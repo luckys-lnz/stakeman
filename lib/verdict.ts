@@ -77,7 +77,7 @@ export function calls(g: Game, p: Prediction | undefined, injuries: Injury[]): C
     else if (flags.includes("total")) out.push({ market: "Total", status: "news", pick: null, price: null,
       reason: `Model ${et.toFixed(1)} vs line ${tl}: too far apart to trust.` });
     else out.push({ market: "Total", status: "pass", pick: null, price: null,
-      reason: `Model ${et.toFixed(1)} vs line ${tl}: within ${Math.abs(et - tl).toFixed(1)} pts, no edge.` });
+      reason: `Info only: model projects ${et.toFixed(1)} vs a line of ${tl}. Stakeman doesn't bet totals. Its totals picks lost money in testing (−9.8% per bet).` });
   }
   return out;
 }

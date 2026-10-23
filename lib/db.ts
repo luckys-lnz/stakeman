@@ -4,7 +4,7 @@ const KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YXZlb3lldGJnY2ZyZ3pna3ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NTg0MzgsImV4cCI6MjEwODMzNDQzOH0.ntpBKplR8-IzKPlP5fLk6IWktRtiGZGk9u2wQXXmZfM";
 
-export const MODEL = "stakeman-elo-v1.3";
+export const MODEL = "stakeman-elo-v1.4";
 
 export async function q<T = any>(path: string, revalidate = 60): Promise<T> {
   const r = await fetch(`${URL_}/rest/v1/${path}`, {

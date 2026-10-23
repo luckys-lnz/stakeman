@@ -3,7 +3,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const MODEL = "stakeman-elo-v1.3";
+const MODEL = "stakeman-elo-v1.4";
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
 const FIRST_SEASON = 2024; // ESPN season.year (2023-24) = warm-up season
 
@@ -248,7 +248,7 @@ async function history(limit: number, minSeason = 2024) {
 }
 
 // ---------- model ----------
-async function loadAll(table: string, select: string, filter: (q: any) => any) {
+async function loadAll(table: string, select: string, filter: (q: any) => any = (q) => q) {
   const out: any[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await filter(sb.from(table).select(select)).range(from, from + 999);

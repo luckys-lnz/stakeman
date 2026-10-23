@@ -54,7 +54,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const tl = p?.market_total != null ? Number(p.market_total) : null, et = p ? Number(p.exp_total) : null;
   const totalVerdict = tl == null || et == null ? null
     : Math.abs(et - tl) < 3 ? `Projection ${et.toFixed(1)} is close to the line (${tl}): no edge.`
-    : `Model projects ${Math.abs(et - tl).toFixed(1)} pts ${et > tl ? "more" : "fewer"} than the line: leans ${et > tl ? "Over" : "Under"}.`;
+    : `Model projects ${Math.abs(et - tl).toFixed(1)} pts ${et > tl ? "more" : "fewer"} than the line (a lean, not a pick: totals picks lost money in testing).`;
   const formVerdict = fa.l10 && fh.l10
     ? Math.abs(fa.l10.margin - fh.l10.margin) < 2 ? `Similar recent form (avg margin ${sg(fa.l10.margin)} vs ${sg(fh.l10.margin)}).`
       : `${fa.l10.margin > fh.l10.margin ? A : H} in better form: avg margin ${sg(Math.max(fa.l10.margin, fh.l10.margin))} vs ${sg(Math.min(fa.l10.margin, fh.l10.margin))} over the last 10.`
@@ -125,7 +125,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
 
       {tl != null && et != null && (
         <section className="chart">
-          <h3>Total: how many points?</h3>
+          <h3>Total: how many points? <small className="muted" style={{ fontFamily: "var(--font-body)", textTransform: "none", fontSize: 13, fontWeight: 500 }}>· info only, no totals picks</small></h3>
           <p className="cverdict">{totalVerdict}</p>
           <NumberLine min={tMid - tSpan} max={tMid + tSpan} left="fewer points" right="more points"
             marks={[
