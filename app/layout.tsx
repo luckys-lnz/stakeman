@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header className="mast">
           <div className="wrap">
-            <Link href="/" className="brand"><img src="/stakeman-mark.svg" alt="" width="34" height="34" />Stake<span>man</span></Link>
+            <Link href="/" className="brand">Stake<span>man</span></Link>
             <nav className="nav">
               <Link href="/">Picks</Link>
               <Link href="/record">Record</Link>

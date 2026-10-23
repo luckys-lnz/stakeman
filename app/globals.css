@@ -54,9 +54,8 @@ a { color: inherit; }
 /* masthead */
 .mast { border-bottom: 2px solid var(--rule-strong); }
 .mast .wrap { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-top: 18px; padding-bottom: 12px; flex-wrap: wrap; }
-.brand { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 30px; letter-spacing: 0.02em; text-transform: uppercase; text-decoration: none; line-height: 1; }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 30px; letter-spacing: 0.02em; text-transform: uppercase; text-decoration: none; line-height: 1; }
 .brand span { color: var(--signal); }
-.brand img { display: block; width: 34px; height: 34px; border-radius: 8px; }
 .nav { display: flex; gap: 18px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 .nav a { text-decoration: none; color: var(--muted); }
 .nav a:hover { color: var(--ink); }
