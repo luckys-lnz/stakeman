@@ -47,7 +47,7 @@ export default async function Record() {
       <section className="hero">
         <div className="kicker">Track record · {MODEL}</div>
         <h1>The record</h1>
-        <p>Every pick is locked at tip-off and graded automatically against the final score. Nothing is deleted or edited after the fact. Units assume a 1-unit stake at the captured price (−110 for spreads and totals).</p>
+        <p>Every pick is locked at tip-off and graded automatically against the final score. Nothing is deleted or edited after the fact. Units assume a 1-unit stake at the captured price (−110 for spreads).</p>
       </section>
 
       {betAll.n > 0 && (
@@ -56,7 +56,7 @@ export default async function Record() {
           <div className="vtitle">{units(betAll.u)}</div>
           <p className="vsub">{betVerdict}</p>
           <div className="vcalls">
-            {bet.map(({ k, m }) => (
+            {bet.filter(({ m }) => (m?.n ?? 0) > 0).map(({ k, m }) => (
               <div className="vcall" key={k}>
                 <div className="vhead"><span className="vmkt">{name[k]}</span><span className={`vchip ${Number(m?.units ?? 0) > 0 ? "play" : ""}`}>{units(Number(m?.units ?? 0))}</span></div>
                 <p>{m?.wins ?? 0}–{m?.losses ?? 0}{m?.pushes ? `–${m.pushes}` : ""} · {m?.accuracy != null ? pct(m.accuracy, 1) : "—"} hit rate · {m?.roi != null ? `${(Number(m.roi) * 100).toFixed(1)}%` : "—"} ROI</p>
@@ -88,7 +88,7 @@ export default async function Record() {
       <div className="section">
         <h2>Live picks</h2>
         <div className="statline">
-          {(["ml", "spread", "total"] as const).map((k) => (
+          {(["ml", "spread", "total"] as const).filter((k) => k !== "total" || t.total.w + t.total.l + t.total.pu > 0).map((k) => (
             <div className="stat" key={k}>
               <b className="num">{t[k].w}–{t[k].l}{t[k].pu ? `–${t[k].pu}` : ""}</b>
               <span>{k === "ml" ? "Moneyline" : k === "spread" ? "Spread" : "Total"} · {units(t[k].units)}</span>
