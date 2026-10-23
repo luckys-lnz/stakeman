@@ -1,5 +1,5 @@
 import GameRow from "./GameRow";
-import { gamesBetween, q, MODEL, type Game, type Metric } from "@/lib/db";
+import { gamesBetween, injuriesFor, groupInjuries, q, MODEL, type Game, type Injury, type Metric } from "@/lib/db";
 import { etDay, etLongDay, pct } from "@/lib/format";
 
 export const revalidate = 60;
@@ -14,6 +14,7 @@ export default async function Home() {
     ),
   ]);
 
+  const inj = groupInjuries(await injuriesFor(games.flatMap((g) => [g.home.id, g.away.id])).catch((): Injury[] => []));
   const today = etDay(new Date(now).toISOString());
   const byDay = new Map<string, Game[]>();
   for (const g of games) {
@@ -50,7 +51,7 @@ export default async function Home() {
             <h2>{d === today ? "Today" : etLongDay(gs[0].start_time).split(",")[0]}</h2>
             <span className="kicker">{etLongDay(gs[0].start_time)} · {gs.length} games</span>
           </div>
-          {gs.map((g) => <GameRow key={g.id} g={g} />)}
+          {gs.map((g) => <GameRow key={g.id} g={g} injuries={[...(inj.get(g.away.id) ?? []), ...(inj.get(g.home.id) ?? [])]} />)}
         </section>
       ))}
     </>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Game } from "@/lib/db";
+import type { Game, Injury } from "@/lib/db";
 import { MODEL } from "@/lib/db";
 import { american, etTime, pct, signed } from "@/lib/format";
 
@@ -8,7 +8,21 @@ function Res({ r }: { r: string | null }) {
   return <span className={`res ${r}`}>{r === "win" ? "W" : r === "loss" ? "L" : "P"}</span>;
 }
 
-export default function GameRow({ g }: { g: Game }) {
+function InjLine({ abbr, list }: { abbr: string; list: Injury[] }) {
+  if (!list.length) return null;
+  const out = list.filter((i) => i.status === "Out");
+  const dtd = list.filter((i) => i.status !== "Out");
+  const names = (l: Injury[]) => l.slice(0, 3).map((i) => i.name.split(" ").slice(-1)[0]).join(", ") + (l.length > 3 ? ` +${l.length - 3}` : "");
+  return (
+    <div className="inj">
+      <b>{abbr}</b>
+      {out.length > 0 && <> out: {names(out)}</>}
+      {dtd.length > 0 && <>{out.length ? " ·" : ""} DTD: {names(dtd)}</>}
+    </div>
+  );
+}
+
+export default function GameRow({ g, injuries = [] }: { g: Game; injuries?: Injury[] }) {
   const p = g.predictions.find((x) => x.model_version === MODEL);
   const hp = p ? Number(p.home_win_prob) : null;
   const live = g.state === "in";
@@ -40,6 +54,12 @@ export default function GameRow({ g }: { g: Game }) {
           {g.home.short_name}
           <span className="prob">{hp === null ? "—" : pct(hp)}</span>
         </div>
+        {injuries.length > 0 && (
+          <div className="injs">
+            <InjLine abbr={g.away.abbr} list={injuries.filter((i) => i.team_id === g.away.id)} />
+            <InjLine abbr={g.home.abbr} list={injuries.filter((i) => i.team_id === g.home.id)} />
+          </div>
+        )}
       </div>
 
       <div className="market">

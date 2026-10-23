@@ -116,6 +116,48 @@ async function ingest(query: string) {
   return { query, events: events.length, games: games.length, newOdds };
 }
 
+// ---------- injuries ----------
+async function ingestInjuries() {
+  const data = await fetchJson("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries");
+  const { data: teamRows } = await sb.from("teams").select("id");
+  const known = new Set((teamRows ?? []).map((t: any) => t.id));
+  const now = new Date().toISOString();
+  const rows: any[] = [];
+  for (const t of data.injuries ?? []) {
+    if (!known.has(String(t.id))) continue;
+    for (const i of t.injuries ?? []) {
+      const pid = i.athlete?.id ?? i.athlete?.links?.[0]?.href?.match(/\/id\/(\d+)/)?.[1];
+      if (!pid || !i.athlete?.displayName) continue;
+      const rd = i.details?.returnDate;
+      rows.push({
+        player_id: String(pid), team_id: String(t.id), name: i.athlete.displayName,
+        position: i.athlete.position?.abbreviation ?? null, status: i.status ?? "Unknown",
+        fantasy_status: i.details?.fantasyStatus?.abbreviation ?? null,
+        injury_type: i.details?.type ?? null, detail: i.details?.detail ?? null,
+        location: i.details?.location ?? null, side: i.details?.side ?? null,
+        return_date: rd && /^\d{4}-\d{2}-\d{2}$/.test(rd) ? rd : null,
+        comment: i.shortComment ?? null, reported_at: i.date ?? null, captured_at: now,
+      });
+    }
+  }
+  // de-dupe (a player can appear twice in rare feed glitches)
+  const byId = new Map(rows.map((r) => [r.player_id, r]));
+  const cur = [...byId.values()];
+  if (cur.length) {
+    const { error } = await sb.from("injuries_current").upsert(cur);
+    if (error) throw error;
+    const { error: e2 } = await sb.from("injury_history").upsert(
+      cur.map(({ player_id, team_id, name, status, fantasy_status, injury_type, return_date, comment, reported_at }) =>
+        ({ player_id, team_id, name, status, fantasy_status, injury_type, return_date, comment, reported_at })),
+      { onConflict: "player_id,reported_at,status", ignoreDuplicates: true });
+    if (e2) throw e2;
+    // players no longer listed are healthy again
+    const { error: e3 } = await sb.from("injuries_current").delete().lt("captured_at", now);
+    if (e3) throw e3;
+  }
+  return { injuries: cur.length };
+}
+
 // ---------- model ----------
 async function loadAll(table: string, select: string, filter: (q: any) => any) {
   const out: any[] = [];
@@ -321,6 +363,7 @@ Deno.serve(async (req) => {
     } else {
       const now = Date.now();
       for (let d = -1; d <= 3; d++) detail.ingest.push(await ingest(ymd(new Date(now + d * 86400e3))));
+      try { detail.injuries = await ingestInjuries(); } catch (e) { detail.injuries = { error: e instanceof Error ? e.message : JSON.stringify(e) }; }
     }
     if (url.searchParams.get("model") !== "0") detail.model = await model();
     await sb.from("pipeline_runs").update({ finished_at: new Date().toISOString(), ok: true, detail }).eq("id", run!.id);

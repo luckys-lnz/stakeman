@@ -58,3 +58,23 @@ export async function oddsFor(ids: string[]) {
   if (!ids.length) return [] as Odds[];
   return q<Odds[]>(`odds_snapshots?select=*&game_id=in.(${ids.join(",")})&order=captured_at.desc`);
 }
+
+export type Injury = {
+  player_id: string; team_id: string; name: string; position: string | null; status: string;
+  fantasy_status: string | null; injury_type: string | null; detail: string | null; location: string | null;
+  side: string | null; return_date: string | null; comment: string | null; reported_at: string | null; captured_at: string;
+};
+
+export async function injuriesFor(teamIds: string[]) {
+  if (!teamIds.length) return [] as Injury[];
+  return q<Injury[]>(`injuries_current?select=*&team_id=in.(${[...new Set(teamIds)].join(",")})&order=status.desc,name.asc`);
+}
+
+export function groupInjuries(list: Injury[]) {
+  const m = new Map<string, Injury[]>();
+  for (const i of list) {
+    if (!m.has(i.team_id)) m.set(i.team_id, []);
+    m.get(i.team_id)!.push(i);
+  }
+  return m;
+}

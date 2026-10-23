@@ -6,6 +6,8 @@ export const revalidate = 300;
 
 type Row = Prediction & { games: Game };
 
+const units = (u: number) => `${u > 0 ? "+" : ""}${u.toFixed(2)}u`;
+
 function tally(rows: Row[], key: "ml" | "spread" | "total") {
   let w = 0, l = 0, pu = 0, units = 0;
   for (const r of rows) {
@@ -44,7 +46,7 @@ export default async function Record() {
           {(["ml", "spread", "total"] as const).map((k) => (
             <div className="stat" key={k}>
               <b className="num">{t[k].w}–{t[k].l}{t[k].pu ? `–${t[k].pu}` : ""}</b>
-              <span>{k === "ml" ? "Moneyline" : k === "spread" ? "Spread" : "Total"} · {signed(t[k].units, 2)}u</span>
+              <span>{k === "ml" ? "Moneyline" : k === "spread" ? "Spread" : "Total"} · {units(t[k].units)}</span>
             </div>
           ))}
           <div className="stat"><b className="num">{live ? pct(live.accuracy, 1) : "—"}</b><span>Winners called · {live?.n ?? 0} games</span></div>
