@@ -46,6 +46,7 @@ function Meta({ f }: { f: Form }) {
     <span className="meta">
       {gp > 0 ? `${f.season.w}-${f.season.l}` : "0-0"}
       {f.streak ? ` · ${f.streak}` : ""}
+      {f.ats.n >= 3 ? ` · ATS ${f.ats.w}-${f.ats.l}` : ""}
       {f.b2b ? <b className="b2b"> · B2B</b> : null}
     </span>
   );

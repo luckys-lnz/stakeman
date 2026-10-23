@@ -8,7 +8,13 @@ import { etDay, etLongDay, pct } from "@/lib/format";
 
 export const revalidate = 60;
 
-export default async function Home() {
+const TABS = [["all", "All"], ["ml", "Moneyline"], ["spread", "Spread"], ["total", "Total"]] as const;
+const MKT: Record<string, string> = { ml: "Moneyline", spread: "Spread", total: "Total" };
+const Stars = ({ n }: { n: number }) => <span className="stars" aria-label={`Confidence ${n} of 5`} title={`Confidence ${n} of 5`}>{"★".repeat(n)}<i>{"★".repeat(5 - n)}</i></span>;
+
+export default async function Home({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
+  const { m } = await searchParams;
+  const tab = m && m in MKT ? m : "all";
   const now = Date.now();
   const [games, metrics, graded] = await Promise.all([
     gamesBetween(new Date(now - 16 * 3600e3).toISOString(), new Date(now + 60 * 3600e3).toISOString()),
@@ -35,7 +41,7 @@ export default async function Home() {
     const p = g.predictions.find((x) => x.model_version === MODEL);
     const injs = [...(inj.get(g.away.id) ?? []), ...(inj.get(g.home.id) ?? [])];
     return calls(g, p, injs).filter((c) => c.status === "play").map((c) => ({ g, c }));
-  }).slice(0, 20);
+  }).filter(({ c }) => tab === "all" || c.market === MKT[tab]).sort((a, b) => (b.c.stars ?? 0) - (a.c.stars ?? 0)).slice(0, 20);
   const today = etDay(new Date(now).toISOString());
   const byDay = new Map<string, Game[]>();
   for (const g of games) {
@@ -65,20 +71,27 @@ export default async function Home() {
         <div className="stat"><b className="num">{w}–{l}</b><span>Live pick record</span></div>
       </div>
 
-      {plays.length > 0 && (
-        <section className="plays">
-          <div className="dayhead"><h2>Plays</h2><span className="kicker">{plays.length} pick{plays.length > 1 ? "s" : ""} · {upcomingCount} games still to tip</span></div>
-          {plays.map(({ g, c }) => (
-            <Link key={g.id + c.market} href={`/game/${g.id}`} className="playrow">
-              <span className="ptime">{etTime(g.start_time)}</span>
-              <span className="pgame">{g.away.abbr} @ {g.home.abbr}</span>
-              <span className="pmkt">{c.market}</span>
-              <span className="ppick">{c.pick}{c.price ? <small> {c.price}</small> : null}</span>
-              <span className="preason">{c.reason}</span>
-            </Link>
-          ))}
-        </section>
-      )}
+      <section className="plays">
+        <div className="dayhead">
+          <h2>Plays</h2>
+          <nav className="tabs" aria-label="Market">
+            {TABS.map(([k, label]) => <Link key={k} href={k === "all" ? "/" : `/?m=${k}`} className={tab === k ? "on" : ""} scroll={false}>{label}</Link>)}
+          </nav>
+        </div>
+        {plays.length === 0 ? (
+          <p className="muted">No {tab === "all" ? "" : MKT[tab].toLowerCase() + " "}plays right now. The model agrees with the market on the games left to tip.</p>
+        ) : plays.map(({ g, c }) => (
+          <Link key={g.id + c.market} href={`/game/${g.id}`} className="playrow">
+            <span className="ptime">{etTime(g.start_time)}</span>
+            <span className="pgame">{g.away.abbr} @ {g.home.abbr}<small>{c.market}</small></span>
+            <span className="ppick">{c.pick}<small> {c.market === "Moneyline" ? c.price : `${c.price} to hit`}</small></span>
+            <span className="pconf">{c.stars ? <Stars n={c.stars} /> : null}</span>
+            <span className="ppay">{c.win100 != null ? <>$100 wins <b>${c.win100.toFixed(0)}</b></> : null}</span>
+            <span className="preason">{c.reason}</span>
+          </Link>
+        ))}
+        <p className="muted pnote">Ranked by confidence (★ = size of the edge). Payouts at the listed price; spreads and totals assume −110.</p>
+      </section>
 
       {days.length === 0 && <div className="empty">No games on the board in the next two days.</div>}
       {days.map(([d, gs]) => (

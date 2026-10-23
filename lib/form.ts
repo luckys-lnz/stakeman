@@ -4,6 +4,10 @@ import { q, type Game, type Injury, type Prediction, type Team } from "./db";
 export type Result = {
   id: string; date: string; season: number; oppId: string; home: boolean;
   pf: number; pa: number; win: boolean;
+  line: number | null;          // this team's closing spread (e.g. -4.5)
+  total: number | null;         // closing total
+  ats: "W" | "L" | "P" | null;  // covered the spread?
+  ou: "O" | "U" | "P" | null;   // game went over/under the total
 };
 
 export type Form = {
@@ -15,11 +19,15 @@ export type Form = {
   away: { w: number; l: number };
   l10: { w: number; l: number; ppg: number; oppg: number; margin: number; total: number } | null;
   streak: string | null;     // "W3" / "L2"
+  ats: { w: number; l: number; p: number; n: number };   // last 10 games with a closing line
+  ou: { o: number; u: number; p: number; n: number };
+  atsStrip: ("W" | "L" | "P")[];                          // last 5 with lines, oldest → newest
   restDays: number | null;   // full days off before this game
   b2b: boolean;
 };
 
-type Row = { id: string; season: number; start_time: string; home_team_id: string; away_team_id: string; home_score: number; away_score: number };
+type Row = { id: string; season: number; start_time: string; home_team_id: string; away_team_id: string; home_score: number; away_score: number;
+  game_lines_hist?: { spread_home: number | null; total: number | null } | null };
 
 /** Completed games (current + previous season) for a set of teams. */
 export async function recentGames(teamIds: string[], minSeason: number) {
@@ -27,7 +35,7 @@ export async function recentGames(teamIds: string[], minSeason: number) {
   if (!ids.length) return [] as Row[];
   const list = ids.join(",");
   return q<Row[]>(
-    `games?select=id,season,start_time,home_team_id,away_team_id,home_score,away_score` +
+    `games?select=id,season,start_time,home_team_id,away_team_id,home_score,away_score,game_lines_hist(spread_home,total)` +
       `&completed=eq.true&season_type=in.(2,3,5)&season=gte.${minSeason}` +
       `&or=(home_team_id.in.(${list}),away_team_id.in.(${list}))&order=start_time.desc&limit=3000`,
     300
@@ -37,7 +45,15 @@ export async function recentGames(teamIds: string[], minSeason: number) {
 const toResult = (g: Row, teamId: string): Result => {
   const home = g.home_team_id === teamId;
   const pf = home ? g.home_score : g.away_score, pa = home ? g.away_score : g.home_score;
-  return { id: g.id, date: g.start_time, season: g.season, oppId: home ? g.away_team_id : g.home_team_id, home, pf, pa, win: pf > pa };
+  const L = g.game_lines_hist ?? null;
+  const line = L?.spread_home != null ? (home ? Number(L.spread_home) : -Number(L.spread_home)) : null;
+  const total = L?.total != null ? Number(L.total) : null;
+  const cover = line != null ? pf - pa + line : null;
+  const over = total != null ? pf + pa - total : null;
+  return { id: g.id, date: g.start_time, season: g.season, oppId: home ? g.away_team_id : g.home_team_id, home, pf, pa, win: pf > pa,
+    line, total,
+    ats: cover == null ? null : cover > 0 ? "W" : cover < 0 ? "L" : "P",
+    ou: over == null ? null : over > 0 ? "O" : over < 0 ? "U" : "P" };
 };
 
 export type GameRow_ = Row;
@@ -74,8 +90,13 @@ export function teamForm(teamId: string, rows: Row[], before: string, season: nu
     b2b = hours < 36;
   }
 
+  const withLine = played.filter((r) => r.ats != null).slice(0, 10);
+  const withTotal = played.filter((r) => r.ou != null).slice(0, 10);
   return {
     teamId, last,
+    ats: { w: withLine.filter((r) => r.ats === "W").length, l: withLine.filter((r) => r.ats === "L").length, p: withLine.filter((r) => r.ats === "P").length, n: withLine.length },
+    ou: { o: withTotal.filter((r) => r.ou === "O").length, u: withTotal.filter((r) => r.ou === "U").length, p: withTotal.filter((r) => r.ou === "P").length, n: withTotal.length },
+    atsStrip: withLine.slice(0, 5).reverse().map((r) => r.ats!),
     strip: played.slice(0, 5).reverse().map((r) => ({
       r: r.win ? "W" : "L", season: r.season,
       label: `${r.win ? "W" : "L"} ${r.pf}-${r.pa} ${r.home ? "vs" : "@"} ${oppAbbr(r.oppId)}`,

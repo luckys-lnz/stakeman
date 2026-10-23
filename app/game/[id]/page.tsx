@@ -59,6 +59,9 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
     ? Math.abs(fa.l10.margin - fh.l10.margin) < 2 ? `Similar recent form (avg margin ${sg(fa.l10.margin)} vs ${sg(fh.l10.margin)}).`
       : `${fa.l10.margin > fh.l10.margin ? A : H} in better form: avg margin ${sg(Math.max(fa.l10.margin, fh.l10.margin))} vs ${sg(Math.min(fa.l10.margin, fh.l10.margin))} over the last 10.`
     : null;
+  const atsVerdict = fa.ats.n >= 5 && fh.ats.n >= 5
+    ? `Against the spread: ${A} ${fa.ats.w}-${fa.ats.l}, ${H} ${fh.ats.w}-${fh.ats.l} in their last ${Math.min(fa.ats.n, fh.ats.n)}+ games with a line.`
+    : null;
   const edgeVerdict = edgeRows.length ? (edgeA === edgeH ? `Even on the numbers (${edgeA}–${edgeH}).` : `${edgeA > edgeH ? A : H} has the edge on ${Math.max(edgeA, edgeH)} of ${edgeRows.length}.`) : null;
 
   // total chart range
@@ -139,11 +142,16 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         <section className="chart">
           <h3>Form: last 10 games</h3>
           {formVerdict && <p className="cverdict">{formVerdict}</p>}
+          {atsVerdict && <p className="csub">{atsVerdict}</p>}
           <div className="grid2 tight">
             {[{ t: g.away, f: fa }, { t: g.home, f: fh }].map(({ t, f }) => (
               <div key={t.id}>
                 <div className="mhead"><b>{t.abbr}</b> <span className="muted">{f.l10 ? `${f.l10.w}-${f.l10.l}` : ""}{f.streak ? ` · ${f.streak}` : ""}</span></div>
                 <MarginBars results={f.last} season={g.season} opp={abbr} />
+                <div className="betform">
+                  <span>Against the spread <b>{f.ats.n ? `${f.ats.w}-${f.ats.l}${f.ats.p ? `-${f.ats.p}` : ""}` : "—"}</b>{f.ats.n ? <small> last {f.ats.n}</small> : null}</span>
+                  <span>Over / under <b>{f.ou.n ? `${f.ou.o}-${f.ou.u}${f.ou.p ? `-${f.ou.p}` : ""}` : "—"}</b>{f.ou.n ? <small> last {f.ou.n}</small> : null}</span>
+                </div>
               </div>
             ))}
           </div>

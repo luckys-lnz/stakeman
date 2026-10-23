@@ -31,6 +31,16 @@ export default async function Record() {
   const seasons = metrics.filter((m) => m.scope === "backtest" && m.label !== "all");
   const live = metrics.find((m) => m.scope === "live");
   const t = { ml: tally(rows, "ml"), spread: tally(rows, "spread"), total: tally(rows, "total") };
+  const bet = (["ml", "spread", "total"] as const).map((k) => ({ k, m: metrics.find((x) => x.scope === "betting" && x.label === k) }));
+  const betAll = bet.reduce((a, { m }) => ({ n: a.n + (m?.n ?? 0), u: a.u + Number(m?.units ?? 0), w: a.w + (m?.wins ?? 0), l: a.l + (m?.losses ?? 0) }), { n: 0, u: 0, w: 0, l: 0 });
+  const det = bet.find((b) => b.m?.detail)?.m?.detail ?? null;
+  const months = det ? Object.entries(det.monthly_units).sort(([a], [b]) => (a < b ? -1 : 1)) : [];
+  const maxAbs = Math.max(1, ...months.map(([, v]) => Math.abs(v)));
+  const name = { ml: "Moneyline", spread: "Spread", total: "Total" } as const;
+  const fmtMonth = (k: string) => new Date(k + "-15").toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  const betVerdict = betAll.n === 0 ? null
+    : betAll.u > 0 ? `Profitable in the backtest: ${units(betAll.u)} over ${betAll.n} picks (${(betAll.u / betAll.n * 100).toFixed(1)}% return per pick).`
+    : `Not profitable in the backtest: ${units(betAll.u)} over ${betAll.n} picks (${(betAll.u / betAll.n * 100).toFixed(1)}% per pick). Treat picks as information, not a money-maker, until the live record says otherwise.`;
 
   return (
     <>
@@ -39,6 +49,40 @@ export default async function Record() {
         <h1>The record</h1>
         <p>Every pick is locked at tip-off and graded automatically against the final score. Nothing is deleted or edited after the fact. Units assume a 1-unit stake at the captured price (−110 for spreads and totals).</p>
       </section>
+
+      {betAll.n > 0 && (
+        <section className={`verdict ${betAll.u > 0 ? "has-play" : ""}`}>
+          <div className="kicker">Would following the picks have made money?</div>
+          <div className="vtitle">{units(betAll.u)}</div>
+          <p className="vsub">{betVerdict}</p>
+          <div className="vcalls">
+            {bet.map(({ k, m }) => (
+              <div className="vcall" key={k}>
+                <div className="vhead"><span className="vmkt">{name[k]}</span><span className={`vchip ${Number(m?.units ?? 0) > 0 ? "play" : ""}`}>{units(Number(m?.units ?? 0))}</span></div>
+                <p>{m?.wins ?? 0}–{m?.losses ?? 0}{m?.pushes ? `–${m.pushes}` : ""} · {m?.accuracy != null ? pct(m.accuracy, 1) : "—"} hit rate · {m?.roi != null ? `${(Number(m.roi) * 100).toFixed(1)}%` : "—"} ROI</p>
+              </div>
+            ))}
+          </div>
+          {det && <p className="vnote">Backtest: today&apos;s pick rules applied to {det.games_with_lines} past games ({det.from ? fmtMonth(det.from.slice(0, 7)) : ""}–{det.to ? fmtMonth(det.to.slice(0, 7)) : ""}) against DraftKings closing lines, 1 unit per pick, −110 on spreads and totals. Each game uses only information from before it. Injury holds aren&apos;t applied (no historical pre-game reports).</p>}
+        </section>
+      )}
+
+      {months.length > 0 && (
+        <section className="chart">
+          <h3>Units won or lost by month</h3>
+          <p className="cverdict">{months.filter(([, v]) => v > 0).length} of {months.length} months in profit.</p>
+          <div className="monthly" role="img" aria-label={months.map(([k, v]) => `${fmtMonth(k)} ${units(v)}`).join(", ")}>
+            {months.map(([k, v]) => (
+              <div className="mcol2" key={k} title={`${fmtMonth(k)}: ${units(v)}`}>
+                <span className="mval">{units(v)}</span>
+                <div className="mup">{v > 0 && <span className="mb w" style={{ height: `${(v / maxAbs) * 100}%` }} />}</div>
+                <div className="mdown">{v < 0 && <span className="mb l" style={{ height: `${(-v / maxAbs) * 100}%` }} />}</div>
+                <span className="mlab2">{fmtMonth(k)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="section">
         <h2>Live picks</h2>

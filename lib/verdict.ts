@@ -8,7 +8,17 @@ export type Call = {
   pick: string | null;      // e.g. "NY +2.5"
   price: string | null;     // e.g. "+110" / "56%"
   reason: string;
+  stars?: number;           // 1-5 confidence, from the size of the edge
+  odds?: number;            // American odds used for the payout line
+  win100?: number;          // profit on a $100 stake
 };
+
+const payout100 = (odds: number) => (odds > 0 ? odds : (100 * 100) / -odds);
+/** Confidence from edge size. ML: blended edge in probability points; spread/total: blended win probability. */
+export function starsFor(kind: "ml" | "prob", x: number) {
+  const cuts = kind === "ml" ? [0.03, 0.04, 0.055, 0.07] : [0.5475, 0.555, 0.565, 0.58];
+  return 1 + cuts.filter((c) => x >= c).length;
+}
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const sgn = (x: number) => (x === 0 ? "PK" : `${x > 0 ? "+" : ""}${Number(x.toFixed(1))}`);
@@ -31,7 +41,8 @@ export function calls(g: Game, p: Prediction | undefined, injuries: Injury[]): C
     const mh = Number(p.market_home_prob), hp = Number(p.home_win_prob);
     if (p.ml_pick) {
       const side = p.ml_pick, t = side === "home" ? H : A;
-      out.push({ market: "Moneyline", status: "play", pick: `${t} to win`, price: am(side === "home" ? p.market_ml_home : p.market_ml_away),
+      const o = Number(side === "home" ? p.market_ml_home : p.market_ml_away);
+      out.push({ market: "Moneyline", status: "play", pick: `${t} to win`, price: am(o), odds: o, win100: payout100(o), stars: starsFor("ml", Number(p.ml_edge)),
         reason: `Market prices ${t} at ${pct(side === "home" ? mh : 1 - mh)}; Stakeman makes it ${pct(Number(p.ml_pick_prob))} after blending with the market.` });
     } else if (flags.includes("ml-inj")) out.push({ market: "Moneyline", status: "hold", pick: null, price: null, reason: holdReason(hp > mh ? "home" : "away") });
     else if (flags.includes("ml")) out.push({ market: "Moneyline", status: "news", pick: null, price: null,
@@ -46,7 +57,7 @@ export function calls(g: Game, p: Prediction | undefined, injuries: Injury[]): C
     const ms = Number(p.market_spread_home), mod = -Number(p.exp_margin);
     if (p.spread_pick) {
       const side = p.spread_pick, t = side === "home" ? H : A, line = side === "home" ? ms : -ms;
-      out.push({ market: "Spread", status: "play", pick: `${t} ${sgn(line)}`, price: pct(Number(p.spread_pick_prob)),
+      out.push({ market: "Spread", status: "play", pick: `${t} ${sgn(line)}`, price: pct(Number(p.spread_pick_prob)), odds: -110, win100: payout100(-110), stars: starsFor("prob", Number(p.spread_pick_prob)),
         reason: `Line is ${H} ${sgn(ms)}, model has ${H} ${sgn(mod)}. ${t} covers about ${pct(Number(p.spread_pick_prob))} of the time.` });
     } else if (flags.includes("spread-inj")) out.push({ market: "Spread", status: "hold", pick: null, price: null, reason: holdReason(mod < ms ? "home" : "away") });
     else if (flags.includes("spread")) out.push({ market: "Spread", status: "news", pick: null, price: null,
@@ -60,7 +71,7 @@ export function calls(g: Game, p: Prediction | undefined, injuries: Injury[]): C
   else {
     const tl = Number(p.market_total), et = Number(p.exp_total);
     if (p.total_pick) {
-      out.push({ market: "Total", status: "play", pick: `${p.total_pick === "over" ? "Over" : "Under"} ${tl}`, price: pct(Number(p.total_pick_prob)),
+      out.push({ market: "Total", status: "play", pick: `${p.total_pick === "over" ? "Over" : "Under"} ${tl}`, price: pct(Number(p.total_pick_prob)), odds: -110, win100: payout100(-110), stars: starsFor("prob", Number(p.total_pick_prob)),
         reason: `Model projects ${et.toFixed(1)} points vs a line of ${tl}. ${p.total_pick === "over" ? "Over" : "Under"} hits about ${pct(Number(p.total_pick_prob))}.` });
     } else if (flags.includes("total-inj")) out.push({ market: "Total", status: "hold", pick: null, price: null, reason: holdReason(null) });
     else if (flags.includes("total")) out.push({ market: "Total", status: "news", pick: null, price: null,

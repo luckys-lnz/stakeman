@@ -43,6 +43,8 @@ export type Metric = {
   scope: string; label: string; n: number; accuracy: number; brier: number; log_loss: number;
   margin_mae: number | null; total_mae: number | null;
   calibration: { bin: string; n: number; predicted: number; actual: number }[];
+  wins?: number | null; losses?: number | null; pushes?: number | null; units?: number | null; roi?: number | null;
+  detail?: { games_with_lines: number; from: string | null; to: string | null; monthly_units: Record<string, number> } | null;
 };
 
 export const GAME_SELECT =

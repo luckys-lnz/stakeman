@@ -202,6 +202,51 @@ async function ingestInjuries() {
   return { injuries: cur.length };
 }
 
+// ---------- history: ESPN game summaries -> closing line + player box scores ----------
+async function summaryOf(id: string) { return await fetchJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${id}`); }
+async function history(limit: number, minSeason = 2024) {
+  // paginate: the "done" list is bigger than one REST page (the bug that stalled the first backfill)
+  const done = new Set((await loadAll("summary_fetch", "game_id", (q) => q.eq("ok", true))).map((r: any) => r.game_id));
+  const all = await loadAll("games", "id,season,start_time,home_team_id,away_team_id",
+    (q) => q.eq("completed", true).neq("season_type", 1).gte("season", minSeason).order("start_time", { ascending: false }));
+  const todo = all.filter((g: any) => !done.has(g.id)).slice(0, limit);
+  let ok = 0, failed = 0, lines = 0, rows = 0;
+  for (let i = 0; i < todo.length; i += 8) {
+    const batch = todo.slice(i, i + 8);
+    const res = await Promise.allSettled(batch.map(async (g: any) => {
+      const d = await summaryOf(g.id);
+      const pc = (d.pickcenter ?? [])[0];
+      const line = pc && pc.spread != null ? { game_id: g.id, provider: pc.provider?.name ?? null, spread_home: num(pc.spread), total: num(pc.overUnder),
+        ml_home: num(pc.homeTeamOdds?.moneyLine), ml_away: num(pc.awayTeamOdds?.moneyLine), fetched_at: new Date().toISOString() } : null;
+      const players: any[] = [];
+      for (const t of d.boxscore?.players ?? []) {
+        const st = t.statistics?.[0]; if (!st) continue;
+        const names: string[] = st.labels ?? st.names ?? [];
+        const iMin = names.indexOf("MIN"), iPts = names.indexOf("PTS"), iPm = names.indexOf("+/-");
+        for (const a of st.athletes ?? []) {
+          if (!a.athlete?.id) continue;
+          const dnp = !!a.didNotPlay || !(a.stats?.length);
+          players.push({ game_id: g.id, team_id: String(t.team?.id ?? ""), player_id: String(a.athlete.id), name: a.athlete.displayName ?? "",
+            starter: !!a.starter, minutes: dnp ? 0 : num(a.stats?.[iMin]), pts: dnp ? 0 : num(a.stats?.[iPts]),
+            plus_minus: dnp ? null : num(a.stats?.[iPm]), dnp, dnp_reason: dnp ? (a.reason ?? null) : null });
+        }
+      }
+      return { line, players };
+    }));
+    const lineRows: any[] = [], playerRows: any[] = [], marks: any[] = [];
+    res.forEach((r, k) => {
+      const id = batch[k].id;
+      if (r.status === "fulfilled") { if (r.value.line) lineRows.push(r.value.line); playerRows.push(...r.value.players); marks.push({ game_id: id, ok: true, fetched_at: new Date().toISOString(), note: r.value.line ? null : "no line" }); ok++; }
+      else { marks.push({ game_id: id, ok: false, fetched_at: new Date().toISOString(), note: String(r.reason).slice(0, 200) }); failed++; }
+    });
+    if (lineRows.length) { const { error } = await sb.from("game_lines_hist").upsert(lineRows); if (error) throw error; lines += lineRows.length; }
+    for (let j = 0; j < playerRows.length; j += 500) { const { error } = await sb.from("player_games").upsert(playerRows.slice(j, j + 500)); if (error) throw error; }
+    rows += playerRows.length;
+    { const { error } = await sb.from("summary_fetch").upsert(marks); if (error) throw error; }
+  }
+  return { remaining: all.filter((g: any) => !done.has(g.id)).length - ok, processed: todo.length, ok, failed, lines, player_rows: rows };
+}
+
 // ---------- model ----------
 async function loadAll(table: string, select: string, filter: (q: any) => any) {
   const out: any[] = [];
@@ -241,12 +286,54 @@ async function model() {
     return { diff, p: pr, em: diff / p.ppe, eh, ea };
   };
 
+  // closing lines for past games (ESPN summaries) -> honest betting backtest of the pick rules
+  const closing = new Map((await loadAll("game_lines_hist", "game_id,spread_home,total,ml_home,ml_away")).map((l: any) => [l.game_id, l]));
+  const bet = { ml: { w: 0, l: 0, p: 0, u: 0 }, spread: { w: 0, l: 0, p: 0, u: 0 }, total: { w: 0, l: 0, p: 0, u: 0 }, games: 0, from: null as string | null, to: null as string | null };
+  const monthly: Record<string, number> = {};
+  const settle = (m: "ml" | "spread" | "total", res: number, profit: number, when: string) => {
+    const t = bet[m];
+    if (res > 0) { t.w++; t.u += profit; } else if (res < 0) { t.l++; t.u -= 1; } else t.p++;
+    const k = when.slice(0, 7); monthly[k] = (monthly[k] ?? 0) + (res > 0 ? profit : res < 0 ? -1 : 0);
+  };
+
   for (const g of done) {
     if (g.home_score == null || g.away_score == null || g.home_score + g.away_score === 0) continue;
     if (g.season !== cur) newSeason(g.season);
     ensure(g.home_team_id); ensure(g.away_team_id);
     const pr = project(g.home_team_id, g.away_team_id, g.neutral);
     const margin = g.home_score - g.away_score, win = margin > 0 ? 1 : 0;
+    const L = closing.get(g.id);
+    if (L && L.spread_home != null && g.season > FIRST_SEASON) {
+      // same rules as live picks (minus the injury hold, which needs point-in-time reports)
+      bet.games++; bet.from = bet.from ?? g.start_time; bet.to = g.start_time;
+      const w = p.blend_w, sp = Number(L.spread_home);
+      let gap = Math.abs(pr.em + sp) > p.max_spread_gap;
+      let mh: number | null = null;
+      if (L.ml_home != null && L.ml_away != null) {
+        const ih = implied(Number(L.ml_home)), ia = implied(Number(L.ml_away)); mh = ih / (ih + ia);
+        if (Math.abs(pr.p - mh) > p.max_ml_gap) gap = true;
+      }
+      if (!gap && mh != null) {
+        const edge = w * (pr.p - mh);
+        if (Math.abs(edge) >= p.ml_edge_min) {
+          const home = edge > 0, price = Number(home ? L.ml_home : L.ml_away);
+          settle("ml", (home ? margin : -margin), price > 0 ? price / 100 : 100 / -price, g.start_time);
+        }
+      }
+      if (!gap) {
+        const bm = w * pr.em + (1 - w) * -sp, hc = phi((bm + sp) / p.margin_sd);
+        const side = hc >= p.ats_min_prob ? 1 : 1 - hc >= p.ats_min_prob ? -1 : 0;
+        if (side) settle("spread", (margin + sp) * side, 100 / 110, g.start_time);
+      }
+      if (L.total != null) {
+        const tl = Number(L.total), et = pr.eh + pr.ea;
+        if (Math.abs(et - tl) <= p.max_total_gap) {
+          const ov = 1 - phi((tl - (w * et + (1 - w) * tl)) / p.total_sd);
+          const side = ov >= p.total_min_prob ? 1 : 1 - ov >= p.total_min_prob ? -1 : 0;
+          if (side) settle("total", (g.home_score + g.away_score - tl) * side, 100 / 110, g.start_time);
+        }
+      }
+    }
     if (g.season > FIRST_SEASON) bt.push({ s: g.season, p: pr.p, win, em: pr.em, margin, et: pr.eh + pr.ea, tot: g.home_score + g.away_score });
     const md = win ? pr.diff : -pr.diff;
     const mult = Math.pow(Math.abs(margin) + 3, 0.8) / (7.5 + 0.006 * md);
@@ -399,6 +486,14 @@ async function model() {
       margin_mae: r4(rows.reduce((s, o) => s + Math.abs(o.margin - o.em), 0) / rows.length),
       total_mae: r4(rows.reduce((s, o) => s + Math.abs(o.tot - o.et), 0) / rows.length), computed_at: now.toISOString() });
   }
+  // betting backtest rows
+  for (const m of ["ml", "spread", "total"] as const) {
+    const t = bet[m], n = t.w + t.l + t.p;
+    metricsRows.push({ model_version: MODEL, scope: "betting", label: m, n, accuracy: t.w + t.l ? r4(t.w / (t.w + t.l)) : null,
+      wins: t.w, losses: t.l, pushes: t.p, units: r4(t.u), roi: n ? r4(t.u / n) : null,
+      detail: { games_with_lines: bet.games, from: bet.from, to: bet.to, monthly_units: Object.fromEntries(Object.entries(monthly).map(([k, v]) => [k, r4(v)])) },
+      computed_at: now.toISOString() });
+  }
   const live = await loadAll("predictions", "home_win_prob,winner_correct,games!inner(home_score,away_score)", (q) => q.eq("model_version", MODEL).not("graded_at", "is", null));
   const lm = metric(live.map((r: any) => ({ p: Number(r.home_win_prob), win: r.games.home_score > r.games.away_score ? 1 : 0 })));
   if (lm) metricsRows.push({ model_version: MODEL, scope: "live", label: "all", ...lm, computed_at: now.toISOString() });
@@ -415,12 +510,15 @@ Deno.serve(async (req) => {
   const { data: run } = await sb.from("pipeline_runs").insert({ action }).select("id").single();
   try {
     const detail: any = { ingest: [] };
-    if (action === "backfill") {
+    if (action === "history") {
+      detail.history = await history(Number(url.searchParams.get("limit") ?? 120), Number(url.searchParams.get("season") ?? 2024));
+    } else if (action === "backfill") {
       const months = (url.searchParams.get("months") ?? "").split(",").filter(Boolean);
       for (const m of months) detail.ingest.push(await ingest(m));
     } else {
       const now = Date.now();
       for (let d = -1; d <= 3; d++) detail.ingest.push(await ingest(ymd(new Date(now + d * 86400e3))));
+      try { detail.history = await history(16, 2027); } catch (e) { detail.history = { error: e instanceof Error ? e.message : JSON.stringify(e) }; }
       try { detail.injuries = await ingestInjuries(); } catch (e) { detail.injuries = { error: e instanceof Error ? e.message : JSON.stringify(e) }; }
     }
     if (url.searchParams.get("model") !== "0") detail.model = await model();
