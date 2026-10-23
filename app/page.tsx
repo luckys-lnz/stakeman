@@ -8,7 +8,7 @@ import { etDay, etLongDay, pct } from "@/lib/format";
 
 export const revalidate = 60;
 
-const TABS = [["all", "All"], ["ml", "Moneyline"], ["spread", "Spread"], ["total", "Total"]] as const;
+const TABS = [["all", "All"], ["ml", "Moneyline"], ["spread", "Spread"]] as const;
 const MKT: Record<string, string> = { ml: "Moneyline", spread: "Spread", total: "Total" };
 const Stars = ({ n }: { n: number }) => <span className="stars" aria-label={`Confidence ${n} of 5`} title={`Confidence ${n} of 5`}>{"★".repeat(n)}<i>{"★".repeat(5 - n)}</i></span>;
 
@@ -18,7 +18,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   const now = Date.now();
   const [games, metrics, graded] = await Promise.all([
     gamesBetween(new Date(now - 16 * 3600e3).toISOString(), new Date(now + 60 * 3600e3).toISOString()),
-    q<Metric[]>(`model_metrics?select=*&model_version=eq.${MODEL}&label=eq.all`),
+    q<Metric[]>(`model_metrics?select=*&model_version=eq.${MODEL}&or=(label.eq.all,scope.eq.betting)`),
     q<{ ml_result: string | null; spread_result: string | null; total_result: string | null }[]>(
       `predictions?select=ml_result,spread_result,total_result&model_version=eq.${MODEL}&graded_at=not.is.null`
     ),
@@ -53,7 +53,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   // keep yesterday only if it has games still live
   const days = [...byDay.entries()].filter(([d, gs]) => d >= today || gs.some((g) => g.state === "in")).slice(0, 3);
 
-  const bt = metrics.find((m) => m.scope === "backtest");
+  const bt = metrics.find((m) => m.scope === "backtest" && m.label === "all");
+  const betRows = metrics.filter((m) => m.scope === "betting");
+  const betN = betRows.reduce((a, m) => a + (m.n ?? 0), 0), betU = betRows.reduce((a, m) => a + Number(m.units ?? 0), 0);
   const all = graded.flatMap((r) => [r.ml_result, r.spread_result, r.total_result]).filter(Boolean) as string[];
   const w = all.filter((r) => r === "win").length, l = all.filter((r) => r === "loss").length;
 
@@ -66,8 +68,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
       </section>
 
       <div className="statline">
-        <div className="stat"><b className="num">{bt ? pct(bt.accuracy, 1) : "—"}</b><span>Backtest winners · {bt?.n.toLocaleString() ?? 0} games</span></div>
-        <div className="stat"><b className="num">{bt ? Number(bt.brier).toFixed(3) : "—"}</b><span>Brier score</span></div>
+        <div className="stat"><b className="num">{betN ? `${betU > 0 ? "+" : ""}${betU.toFixed(1)}u` : "—"}</b><span>Backtest profit · {betN} picks</span></div>
+        <div className="stat"><b className="num">{betN ? `${(betU / betN * 100).toFixed(1)}%` : "—"}</b><span>Return per pick</span></div>
+        <div className="stat"><b className="num">{bt ? pct(bt.accuracy, 1) : "—"}</b><span>Winners called · {bt?.n.toLocaleString() ?? 0} games</span></div>
         <div className="stat"><b className="num">{w}–{l}</b><span>Live pick record</span></div>
       </div>
 
@@ -90,7 +93,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
             <span className="preason">{c.reason}</span>
           </Link>
         ))}
-        <p className="muted pnote">Ranked by confidence (★ = size of the edge). Payouts at the listed price; spreads and totals assume −110.</p>
+        <p className="muted pnote">Ranked by confidence (★ = size of the edge). Payouts at the listed price; spreads assume −110. <Link href="/record">See the record</Link>.</p>
       </section>
 
       {days.length === 0 && <div className="empty">No games on the board in the next two days.</div>}
