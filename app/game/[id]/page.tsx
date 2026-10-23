@@ -55,7 +55,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const ms = p?.market_spread_home != null ? Number(p.market_spread_home) : null, mod = p ? -Number(p.exp_margin) : null;
   const modInj = mod != null ? mod - injAdj : null; // home spread view after injuries
   const injNote = mod != null && Math.abs(injAdj) >= 0.5
-    ? `Counting fresh absences (${outFresh.map((i) => i.name.split(" ").slice(-1)[0]).join(", ")}), the model's line moves ${Math.abs(injAdj).toFixed(1)} pts toward ${injAdj > 0 ? H : A}: ${H} ${(modInj! > 0 ? "+" : "") + modInj!.toFixed(1)}. Shown for context; picks use the tested rules.`
+    ? `Counting fresh absences (${outFresh.map((i) => lastName(i.name)).join(", ")}), the model's line moves ${Math.abs(injAdj).toFixed(1)} pts toward ${injAdj > 0 ? H : A}: ${H} ${(modInj! > 0 ? "+" : "") + modInj!.toFixed(1)}. Shown for context; picks use the tested rules.`
     : null;
   const spreadVerdict = ms == null || mod == null ? null
     : Math.abs(mod - ms) < 1.5 ? `Model and line within ${Math.abs(mod - ms).toFixed(1)} pts: no edge.`
