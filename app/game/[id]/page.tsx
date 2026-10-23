@@ -58,7 +58,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
                       <td>{i.name}{i.position ? <span className="muted"> · {i.position}</span> : null}{i.comment ? <div className="muted" style={{ fontSize: 12, fontFamily: "var(--font-body)", textTransform: "none", marginTop: 2 }}>{i.comment}</div> : null}</td>
                       <td data-l="Team">{t.abbr}</td>
                       <td data-l="Status"><b className={i.status === "Out" ? "res loss" : "res push"} style={{ marginLeft: 0 }}>{i.status}</b></td>
-                      <td data-l="Injury">{[i.side, i.injury_type, i.detail].filter(Boolean).join(" ") || "—"}</td>
+                      <td data-l="Injury">{[i.side, i.injury_type, i.detail].filter((x) => x && x !== "Not Specified").join(" ") || "—"}</td>
                       <td data-l="Est. return" className="num">{i.return_date ?? "—"}</td>
                     </tr>
                   )))}

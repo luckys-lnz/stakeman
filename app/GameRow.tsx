@@ -12,7 +12,8 @@ function InjLine({ abbr, list }: { abbr: string; list: Injury[] }) {
   if (!list.length) return null;
   const out = list.filter((i) => i.status === "Out");
   const dtd = list.filter((i) => i.status !== "Out");
-  const names = (l: Injury[]) => l.slice(0, 3).map((i) => i.name.split(" ").slice(-1)[0]).join(", ") + (l.length > 3 ? ` +${l.length - 3}` : "");
+  const last = (n: string) => n.split(" ").filter((w) => !/^(Jr\.?|Sr\.?|II|III|IV|V)$/i.test(w)).slice(-1)[0] ?? n;
+  const names = (l: Injury[]) => l.slice(0, 3).map((i) => last(i.name)).join(", ") + (l.length > 3 ? ` +${l.length - 3}` : "");
   return (
     <div className="inj">
       <b>{abbr}</b>
