@@ -112,7 +112,7 @@ export default function GameRow({ g, injuries = [], form }: { g: Game; injuries?
       <div className="market">
         <div className="label">Spread</div>
         <div className="line">
-          {p?.market_spread_home != null ? `${g.home.abbr} ${signed(p.market_spread_home)} · model ${g.home.abbr} ${signed(-Number(p.exp_margin))}` : "No line yet"}
+          {p?.market_spread_home != null ? `${g.home.abbr} ${signed(p.market_spread_home)}` : "No line yet"}
         </div>
         {p && (spPick ? (
           <span className="pick on">{spPick}<small>{pct(p.spread_pick_prob)}</small><Res r={p.spread_result} /></span>
@@ -122,7 +122,7 @@ export default function GameRow({ g, injuries = [], form }: { g: Game; injuries?
       <div className="market">
         <div className="label">Total</div>
         <div className="line">
-          {p?.market_total != null ? `${p.market_total} · model ${Number(p.exp_total).toFixed(1)}` : "No line yet"}
+          {p?.market_total != null ? `O/U ${p.market_total}` : "No line yet"}
         </div>
         {p && (totPick ? (
           <span className="pick on">{totPick}<small>{pct(p.total_pick_prob)}</small><Res r={p.total_result} /></span>

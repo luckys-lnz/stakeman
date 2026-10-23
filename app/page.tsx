@@ -1,6 +1,9 @@
 import GameRow from "./GameRow";
 import { gamesBetween, injuriesFor, groupInjuries, q, MODEL, type Game, type Injury, type Metric, type Team } from "@/lib/db";
 import { recentGames, teamForm, teamMap } from "@/lib/form";
+import { calls } from "@/lib/verdict";
+import Link from "next/link";
+import { etTime } from "@/lib/format";
 import { etDay, etLongDay, pct } from "@/lib/format";
 
 export const revalidate = 60;
@@ -26,6 +29,13 @@ export default async function Home() {
     home: teamForm(g.home.id, recent, g.start_time, g.season, abbr),
   });
   const inj = groupInjuries(await injuriesFor(games.flatMap((g) => [g.home.id, g.away.id])).catch((): Injury[] => []));
+  const pending = games.filter((g) => g.state === "pre");
+  const upcomingCount = pending.length;
+  const plays = pending.flatMap((g) => {
+    const p = g.predictions.find((x) => x.model_version === MODEL);
+    const injs = [...(inj.get(g.away.id) ?? []), ...(inj.get(g.home.id) ?? [])];
+    return calls(g, p, injs).filter((c) => c.status === "play").map((c) => ({ g, c }));
+  }).slice(0, 20);
   const today = etDay(new Date(now).toISOString());
   const byDay = new Map<string, Game[]>();
   for (const g of games) {
@@ -46,7 +56,7 @@ export default async function Home() {
       <section className="hero">
         <div className="kicker">NBA · 2026–27 regular season</div>
         <h1>Tonight&apos;s board</h1>
-        <p>Win probabilities from the Stakeman model for every game, next to the market line. A highlighted pick means the model disagrees with the market by enough to matter. Everything else is a pass.</p>
+        <p>Plays first: the bets where the model disagrees with the market by enough to matter. Every other game is a pass. Tap any game for the charts behind the call.</p>
       </section>
 
       <div className="statline">
@@ -54,6 +64,21 @@ export default async function Home() {
         <div className="stat"><b className="num">{bt ? Number(bt.brier).toFixed(3) : "—"}</b><span>Brier score</span></div>
         <div className="stat"><b className="num">{w}–{l}</b><span>Live pick record</span></div>
       </div>
+
+      {plays.length > 0 && (
+        <section className="plays">
+          <div className="dayhead"><h2>Plays</h2><span className="kicker">{plays.length} pick{plays.length > 1 ? "s" : ""} · {upcomingCount} games still to tip</span></div>
+          {plays.map(({ g, c }) => (
+            <Link key={g.id + c.market} href={`/game/${g.id}`} className="playrow">
+              <span className="ptime">{etTime(g.start_time)}</span>
+              <span className="pgame">{g.away.abbr} @ {g.home.abbr}</span>
+              <span className="pmkt">{c.market}</span>
+              <span className="ppick">{c.pick}{c.price ? <small> {c.price}</small> : null}</span>
+              <span className="preason">{c.reason}</span>
+            </Link>
+          ))}
+        </section>
+      )}
 
       {days.length === 0 && <div className="empty">No games on the board in the next two days.</div>}
       {days.map(([d, gs]) => (

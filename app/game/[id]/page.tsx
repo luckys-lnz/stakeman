@@ -1,11 +1,16 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { q, oddsFor, injuriesFor, GAME_SELECT, MODEL, type Game, type Injury, type Team } from "@/lib/db";
-import { recentGames, teamForm, headToHead, whyLines, teamMap, type Form } from "@/lib/form";
+import { recentGames, teamForm, headToHead, teamMap, type Form } from "@/lib/form";
+import { calls, headline, edges } from "@/lib/verdict";
 import { Strip } from "../../GameRow";
+import { ProbSplit, NumberLine, MarginBars, EdgeRows } from "../../charts";
 import { american, etDateTime, etLongDay, etTime, pct, signed } from "@/lib/format";
 
 export const revalidate = 60;
+
+const lastName = (n: string) => n.split(" ").filter((w) => !/^(Jr\.?|Sr\.?|II|III|IV|V)$/i.test(w)).slice(-1)[0] ?? n;
+const sg = (x: number) => (x === 0 ? "PK" : `${x > 0 ? "+" : ""}${Number(x.toFixed(1))}`);
 
 export default async function GamePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,7 +19,6 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const g = games[0];
   if (!g) notFound();
   const p = g.predictions.find((x) => x.model_version === MODEL);
-  const hp = p ? Number(p.home_win_prob) : null;
   const first = odds.length ? odds[odds.length - 1] : null;
   const injuries: Injury[] = g.completed ? [] : await injuriesFor([g.away.id, g.home.id]).catch((): Injury[] => []);
   const [recent, teams, ratings] = await Promise.all([
@@ -26,23 +30,43 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const fa = teamForm(g.away.id, recent, g.start_time, g.season, abbr);
   const fh = teamForm(g.home.id, recent, g.start_time, g.season, abbr);
   const h2h = headToHead(g.away.id, g.home.id, recent, g.start_time, 5);
-  const why = whyLines(g, p, fa, fh, h2h, injuries);
   const nba = ratings.filter((r) => /^([1-9]|[12][0-9]|30)$/.test(r.team_id)); // the 30 franchises (excludes All-Star squads)
-  const rank = (id: string) => { const i = nba.findIndex((r) => r.team_id === id); return i >= 0 ? i + 1 : null; };
-  const rec = (x: { w: number; l: number }) => `${x.w}-${x.l}`;
-  const sgn = (x: number) => `${x >= 0 ? "+" : ""}${x.toFixed(1)}`;
-  const rows: [string, (f: Form, id: string) => React.ReactNode][] = [
-    ["Last 5", (f) => <Strip f={f} />],
-    ["Record (this season)", (f) => rec(f.season)],
-    ["Home / away", (f) => `${rec(f.home)} / ${rec(f.away)}`],
-    ["Streak", (f) => f.streak ?? "—"],
-    ["Last 10", (f) => (f.l10 ? rec(f.l10) : "—")],
-    ["Points for / against (L10)", (f) => (f.l10 ? `${f.l10.ppg.toFixed(1)} / ${f.l10.oppg.toFixed(1)}` : "—")],
-    ["Avg margin (L10)", (f) => (f.l10 ? sgn(f.l10.margin) : "—")],
-    ["Avg game total (L10)", (f) => (f.l10 ? f.l10.total.toFixed(1) : "—")],
-    ["Rest", (f) => (f.restDays == null ? "—" : f.b2b ? "Back-to-back" : `${f.restDays} day${f.restDays === 1 ? "" : "s"}`)],
-    ["Power rank (Elo)", (_f, id) => { const r = rank(id); return r ? `#${r} of 30` : "—"; }],
-  ];
+  const rank = (tid: string) => { const i = nba.findIndex((r) => r.team_id === tid); return i >= 0 ? i + 1 : null; };
+  const A = g.away.abbr, H = g.home.abbr;
+
+  const cs = calls(g, p, injuries);
+  const hl = headline(cs);
+  const edgeRows = edges(fa, fh, rank(g.away.id), rank(g.home.id));
+  const edgeA = edgeRows.filter((r) => r.edge === "a").length, edgeH = edgeRows.filter((r) => r.edge === "h").length;
+  const keyOut = injuries.filter((i) => i.key);
+  const gpA = fa.season.w + fa.season.l, gpH = fh.season.w + fh.season.l;
+
+  // chart verdicts — one line each
+  const hp = p ? Number(p.home_win_prob) : null, mh = p?.market_home_prob != null ? Number(p.market_home_prob) : null;
+  const winVerdict = hp == null ? null : mh == null
+    ? `Model: ${hp >= 0.5 ? H : A} ${pct(Math.max(hp, 1 - hp))} to win.`
+    : Math.abs(hp - mh) < 0.03 ? `Model and market agree: ${hp >= 0.5 ? H : A} is about ${pct(Math.max(hp, 1 - hp))} to win.`
+    : `Model is higher on ${hp > mh ? H : A} than the market (${pct(hp > mh ? hp : 1 - hp)} vs ${pct(hp > mh ? mh : 1 - mh)}).`;
+  const ms = p?.market_spread_home != null ? Number(p.market_spread_home) : null, mod = p ? -Number(p.exp_margin) : null;
+  const spreadVerdict = ms == null || mod == null ? null
+    : Math.abs(mod - ms) < 1.5 ? `Model and line within ${Math.abs(mod - ms).toFixed(1)} pts: no edge.`
+    : `Model rates ${mod < ms ? H : A} ${Math.abs(mod - ms).toFixed(1)} pts better than the line does.`;
+  const tl = p?.market_total != null ? Number(p.market_total) : null, et = p ? Number(p.exp_total) : null;
+  const totalVerdict = tl == null || et == null ? null
+    : Math.abs(et - tl) < 3 ? `Projection ${et.toFixed(1)} is close to the line (${tl}): no edge.`
+    : `Model projects ${Math.abs(et - tl).toFixed(1)} pts ${et > tl ? "more" : "fewer"} than the line: leans ${et > tl ? "Over" : "Under"}.`;
+  const formVerdict = fa.l10 && fh.l10
+    ? Math.abs(fa.l10.margin - fh.l10.margin) < 2 ? `Similar recent form (avg margin ${sg(fa.l10.margin)} vs ${sg(fh.l10.margin)}).`
+      : `${fa.l10.margin > fh.l10.margin ? A : H} in better form: avg margin ${sg(Math.max(fa.l10.margin, fh.l10.margin))} vs ${sg(Math.min(fa.l10.margin, fh.l10.margin))} over the last 10.`
+    : null;
+  const edgeVerdict = edgeRows.length ? (edgeA === edgeH ? `Even on the numbers (${edgeA}–${edgeH}).` : `${edgeA > edgeH ? A : H} has the edge on ${Math.max(edgeA, edgeH)} of ${edgeRows.length}.`) : null;
+
+  // total chart range
+  const tVals = [tl, et, fa.l10?.total, fh.l10?.total].filter((v): v is number => v != null);
+  const tMid = tl ?? et ?? 225;
+  const tSpan = Math.max(15, ...tVals.map((v) => Math.abs(v - tMid) + 4));
+  const sVals = [ms, mod].filter((v): v is number => v != null);
+  const sSpan = Math.max(10, ...sVals.map((v) => Math.abs(v) + 3));
 
   return (
     <>
@@ -52,181 +76,182 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         </div>
         <h1>{g.away.short_name} at {g.home.short_name}</h1>
         {(g.completed || g.state === "in") && (
-          <p className="num">{g.completed ? "Final" : g.status_detail}: {g.away.abbr} {g.away_score} – {g.home.abbr} {g.home_score}</p>
+          <p className="num">{g.completed ? "Final" : g.status_detail}: {A} {g.away_score} – {H} {g.home_score}</p>
         )}
       </section>
 
-      <div className="bigprob">
-        <div className="side">
-          <img src={g.away.logo} alt="" />
-          <span className="p">{hp === null ? "—" : pct(1 - hp)}</span>
-          <span className="kicker">{g.away.name}</span>
+      {/* 1 — the verdict */}
+      <section className={`verdict ${cs.some((c) => c.status === "play") ? "has-play" : ""}`}>
+        <div className="kicker">Stakeman verdict</div>
+        <div className="vtitle">{hl.title}</div>
+        <p className="vsub">{hl.sub}</p>
+        <div className="vcalls">
+          {cs.map((c) => (
+            <div key={c.market} className={`vcall ${c.status}`}>
+              <div className="vhead">
+                <span className="vmkt">{c.market}</span>
+                <span className={`vchip ${c.status}`}>
+                  {c.status === "play" ? `${c.pick}${c.price ? ` · ${c.price}` : ""}` : c.status === "hold" ? "Injury hold" : c.status === "news" ? "Check news" : c.status === "noline" ? "No line" : "Pass"}
+                </span>
+              </div>
+              <p>{c.reason}</p>
+            </div>
+          ))}
         </div>
-        <div className="vs">@</div>
-        <div className="side r">
-          <img src={g.home.logo} alt="" />
-          <span className="p">{hp === null ? "—" : pct(hp)}</span>
-          <span className="kicker">{g.home.name}</span>
-        </div>
-      </div>
+        {(gpA < 5 || gpH < 5) && <p className="vnote">Early season: {A} has played {gpA} game{gpA === 1 ? "" : "s"}, {H} {gpH}. Ratings still lean on last season.</p>}
+        {keyOut.length > 0 && <p className="vnote">Key absences: {keyOut.map((i) => `${lastName(i.name)} (${abbr(i.team_id)}, ${i.status === "Out" ? "out" : "questionable"})`).join(", ")}.</p>}
+      </section>
 
-      {why.length > 0 && (
-        <div className="callout why">
-          <div className="kicker" style={{ marginBottom: 6 }}>Why the model sees it this way</div>
-          <ul>{why.map((w, i) => <li key={i}>{w}</li>)}</ul>
-        </div>
+      {/* 2 — the evidence, one question per chart */}
+      {p && hp != null && (
+        <section className="chart">
+          <h3>Who wins?</h3>
+          <p className="cverdict">{winVerdict}</p>
+          <ProbSplit away={A} home={H} rows={[{ label: "Model", home: hp }, ...(mh != null ? [{ label: "Market", home: mh }] : [])]} />
+        </section>
       )}
 
-      <div className="section">
-        <h2>Matchup</h2>
-        <div className="tablewrap" style={{ marginTop: 12 }}>
-          <table className="cmp">
-            <thead><tr><th></th><th>{g.away.abbr}</th><th>{g.home.abbr}</th></tr></thead>
-            <tbody>
-              {rows.map(([label, fn]) => (
-                <tr key={label}><td className="muted">{label}</td><td className="num">{fn(fa, g.away.id)}</td><td className="num">{fn(fh, g.home.id)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="muted" style={{ fontSize: 13 }}>Faded results are from last season. Against-the-spread records start once Stakeman has a few weeks of saved lines.</p>
-      </div>
+      {ms != null && mod != null && (
+        <section className="chart">
+          <h3>Spread: by how much?</h3>
+          <p className="cverdict">{spreadVerdict}</p>
+          <NumberLine min={-sSpan} max={sSpan} left={`${H} favored ←`} right={`→ ${A} favored`}
+            marks={[{ v: ms, label: `Line ${H}`, kind: "market" }, { v: mod, label: `Model ${H}`, kind: "model" }]} />
+        </section>
+      )}
 
-      <div className="section grid2">
-        {[{ t: g.away, f: fa }, { t: g.home, f: fh }].map(({ t, f }) => (
-          <div key={t.id}>
-            <h3>{t.short_name}: last 10</h3>
-            {f.last.length === 0 ? <p className="muted">No games yet.</p> : (
-              <table style={{ marginTop: 8 }}>
+      {tl != null && et != null && (
+        <section className="chart">
+          <h3>Total: how many points?</h3>
+          <p className="cverdict">{totalVerdict}</p>
+          <NumberLine min={tMid - tSpan} max={tMid + tSpan} left="fewer points" right="more points"
+            marks={[
+              { v: tl, label: "Line", kind: "market" },
+              { v: et, label: "Model", kind: "model" },
+              ...(fa.l10 ? [{ v: fa.l10.total, label: `${A} avg`, kind: "ref" as const }] : []),
+              ...(fh.l10 ? [{ v: fh.l10.total, label: `${H} avg`, kind: "ref" as const }] : []),
+            ]} />
+          <p className="cfoot">Team averages are the combined score in each team&apos;s last 10 games.</p>
+        </section>
+      )}
+
+      {(fa.last.length > 0 || fh.last.length > 0) && (
+        <section className="chart">
+          <h3>Form: last 10 games</h3>
+          {formVerdict && <p className="cverdict">{formVerdict}</p>}
+          <div className="grid2 tight">
+            {[{ t: g.away, f: fa }, { t: g.home, f: fh }].map(({ t, f }) => (
+              <div key={t.id}>
+                <div className="mhead"><b>{t.abbr}</b> <span className="muted">{f.l10 ? `${f.l10.w}-${f.l10.l}` : ""}{f.streak ? ` · ${f.streak}` : ""}</span></div>
+                <MarginBars results={f.last} season={g.season} opp={abbr} />
+              </div>
+            ))}
+          </div>
+          <p className="cfoot">Bar height is the winning or losing margin (capped at 30). Faded bars are last season.</p>
+        </section>
+      )}
+
+      {edgeRows.length > 0 && (
+        <section className="chart">
+          <h3>Head to head on the numbers</h3>
+          {edgeVerdict && <p className="cverdict">{edgeVerdict}</p>}
+          <EdgeRows away={A} home={H} rows={edgeRows} />
+          {h2h.length > 0 && (
+            <p className="cfoot">
+              Last {h2h.length} meetings: {h2h.map((x) => `${x.home_score > x.away_score ? abbr(x.home_team_id) : abbr(x.away_team_id)} by ${Math.abs(x.home_score - x.away_score)}`).join(" · ")}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* 3 — everything else, folded away */}
+      <details className="more">
+        <summary>Full numbers: injuries, game logs, lines, model detail</summary>
+
+        {!g.completed && (
+          <div className="section">
+            <h3>Injury report</h3>
+            {injuries.length === 0 ? <p className="muted">No players listed for either team.</p> : (
+              <div className="tablewrap" style={{ marginTop: 8 }}>
+                <table className="mvm">
+                  <thead><tr><th>Player</th><th>Team</th><th>Status</th><th>Injury</th><th>Est. return</th></tr></thead>
+                  <tbody>
+                    {[g.away, g.home].flatMap((t) => injuries.filter((i) => i.team_id === t.id).map((i) => (
+                      <tr key={i.player_id}>
+                        <td>{i.name}{i.key ? " ★" : ""}{i.mpg != null ? <span className="muted"> · {Number(i.mpg).toFixed(1)} min/g</span> : null}</td>
+                        <td data-l="Team">{t.abbr}</td>
+                        <td data-l="Status">{i.status}</td>
+                        <td data-l="Injury">{[i.side, i.injury_type, i.detail].filter((x) => x && x !== "Not Specified").join(" ") || "—"}</td>
+                        <td data-l="Est. return" className="num">{i.return_date ?? "—"}</td>
+                      </tr>
+                    )))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="muted" style={{ fontSize: 13 }}>★ = key player (28+ minutes and 15+ points a game). Source: ESPN.</p>
+          </div>
+        )}
+
+        <div className="section grid2">
+          {[{ t: g.away, f: fa }, { t: g.home, f: fh }].map(({ t, f }: { t: Team; f: Form }) => (
+            <div key={t.id}>
+              <h3>{t.short_name}: last 10</h3>
+              <div style={{ margin: "6px 0" }}><Strip f={f} /></div>
+              <table>
                 <tbody>
                   {f.last.map((r) => (
                     <tr key={r.id} className={r.season !== g.season ? "muted" : ""}>
                       <td className="num" style={{ width: 64 }}>{new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }).format(new Date(r.date))}</td>
                       <td>{r.home ? "vs" : "@"} {abbr(r.oppId)}</td>
-                      <td className="num"><b className={`res ${r.win ? "win" : "loss"}`} style={{ marginLeft: 0 }}>{r.win ? "W" : "L"}</b> {r.pf}-{r.pa}</td>
+                      <td className="num">{r.win ? "W" : "L"} {r.pf}-{r.pa}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="section">
-        <h2>Head to head</h2>
-        {h2h.length === 0 ? <p className="muted">No meetings in the last two seasons.</p> : (
-          <div className="tablewrap" style={{ marginTop: 12 }}>
-            <table>
-              <tbody>
-                {h2h.map((x) => {
-                  const hw = x.home_score > x.away_score;
-                  return (
-                    <tr key={x.id}>
-                      <td className="num" style={{ width: 110 }}>{new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" }).format(new Date(x.start_time))}</td>
-                      <td>{abbr(x.away_team_id)} @ {abbr(x.home_team_id)}</td>
-                      <td className="num">{x.away_score}–{x.home_score}</td>
-                      <td><b>{hw ? abbr(x.home_team_id) : abbr(x.away_team_id)}</b> won by {Math.abs(x.home_score - x.away_score)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {!g.completed && (
-        <div className="section">
-          <h2>Injury report</h2>
-          {injuries.length === 0 ? (
-            <p className="muted">No players listed for either team.</p>
-          ) : (
-            <div className="tablewrap" style={{ marginTop: 12 }}>
-              <table className="mvm">
-                <thead><tr><th>Player</th><th>Team</th><th>Status</th><th>Injury</th><th>Est. return</th></tr></thead>
-                <tbody>
-                  {[g.away, g.home].flatMap((t) => injuries.filter((i) => i.team_id === t.id).map((i) => (
-                    <tr key={i.player_id}>
-                      <td>{i.name}{i.key ? " ★" : ""}{i.position ? <span className="muted"> · {i.position}</span> : null}{i.mpg != null ? <span className="muted"> · {Number(i.mpg).toFixed(1)} min/g</span> : null}{i.comment ? <div className="muted" style={{ fontSize: 12, fontFamily: "var(--font-body)", textTransform: "none", marginTop: 2 }}>{i.comment}</div> : null}</td>
-                      <td data-l="Team">{t.abbr}</td>
-                      <td data-l="Status"><b className={i.status === "Out" ? "res loss" : "res push"} style={{ marginLeft: 0 }}>{i.status}</b></td>
-                      <td data-l="Injury">{[i.side, i.injury_type, i.detail].filter((x) => x && x !== "Not Specified").join(" ") || "—"}</td>
-                      <td data-l="Est. return" className="num">{i.return_date ?? "—"}</td>
-                    </tr>
-                  )))}
-                </tbody>
-              </table>
             </div>
-          )}
-          <p className="muted" style={{ fontSize: 13 }}>★ = key player (28+ minutes and 15+ points a game). When a key player is newly out or questionable, Stakeman withholds picks on that team and overs in this game, because the ratings model cannot see the absence. Source: ESPN injury report and player stats.</p>
+          ))}
         </div>
-      )}
-      {!p && <div className="callout">No prediction for this game yet. Predictions are made for games within the next four days.</div>}
 
-      {p && (
-        <>
+        {p && (
           <div className="section">
-            <h2>Model vs market</h2>
-            <div className="tablewrap" style={{ marginTop: 12 }}>
+            <h3>Model vs market</h3>
+            <div className="tablewrap" style={{ marginTop: 8 }}>
               <table className="mvm">
-                <thead>
-                  <tr><th>Market</th><th>Line</th><th>Model view</th><th>Model probability</th><th>Call</th></tr>
-                </thead>
+                <thead><tr><th>Market</th><th>Line</th><th>Model view</th><th>Model probability</th></tr></thead>
                 <tbody>
-                  <tr>
-                    <td>Moneyline</td>
-                    <td className="num" data-l="Line">{g.away.abbr} {american(p.market_ml_away)} / {g.home.abbr} {american(p.market_ml_home)}</td>
-                    <td className="num" data-l="Model view">Market implies {g.home.abbr} {pct(p.market_home_prob, 1)}</td>
-                    <td className="num" data-l="Model probability">{g.home.abbr} {pct(p.home_win_prob, 1)}</td>
-                    <td data-l="Call">{p.ml_pick ? <b>{p.ml_pick === "home" ? g.home.abbr : g.away.abbr} ML · {pct(p.ml_edge, 1)} edge</b> : p.flags?.includes("ml-inj") ? "Injury hold" : "Pass"}{p.ml_result ? ` · ${p.ml_result.toUpperCase()}` : ""}</td>
-                  </tr>
-                  <tr>
-                    <td>Spread</td>
-                    <td className="num" data-l="Line">{g.home.abbr} {signed(p.market_spread_home)}</td>
-                    <td className="num" data-l="Model view">{g.home.abbr} {signed(-Number(p.exp_margin))}</td>
-                    <td className="num" data-l="Model probability">{g.home.abbr} covers {pct(p.home_cover_prob, 1)}</td>
-                    <td data-l="Call">{p.spread_pick ? <b>{p.spread_pick === "home" ? `${g.home.abbr} ${signed(p.spread_line)}` : `${g.away.abbr} ${signed(-Number(p.spread_line))}`}</b> : p.flags?.includes("spread-inj") ? "Injury hold" : "Pass"}{p.spread_result ? ` · ${p.spread_result.toUpperCase()}` : ""}</td>
-                  </tr>
-                  <tr>
-                    <td>Total</td>
-                    <td className="num" data-l="Line">{p.market_total ?? "—"}</td>
-                    <td className="num" data-l="Model view">{Number(p.exp_total).toFixed(1)} ({Number(p.exp_away_score).toFixed(0)}–{Number(p.exp_home_score).toFixed(0)})</td>
-                    <td className="num" data-l="Model probability">Over {pct(p.over_prob, 1)}</td>
-                    <td data-l="Call">{p.total_pick ? <b>{p.total_pick === "over" ? "Over" : "Under"} {p.total_line}</b> : p.flags?.includes("total-inj") ? "Injury hold" : "Pass"}{p.total_result ? ` · ${p.total_result.toUpperCase()}` : ""}</td>
-                  </tr>
+                  <tr><td>Moneyline</td><td className="num" data-l="Line">{A} {american(p.market_ml_away)} / {H} {american(p.market_ml_home)}</td><td className="num" data-l="Model view">Market implies {H} {pct(p.market_home_prob, 1)}</td><td className="num" data-l="Model probability">{H} {pct(p.home_win_prob, 1)}</td></tr>
+                  <tr><td>Spread</td><td className="num" data-l="Line">{H} {signed(p.market_spread_home)}</td><td className="num" data-l="Model view">{H} {signed(-Number(p.exp_margin))}</td><td className="num" data-l="Model probability">{H} covers {pct(p.home_cover_prob, 1)}</td></tr>
+                  <tr><td>Total</td><td className="num" data-l="Line">{p.market_total ?? "—"}</td><td className="num" data-l="Model view">{Number(p.exp_total).toFixed(1)}</td><td className="num" data-l="Model probability">Over {pct(p.over_prob, 1)}</td></tr>
                 </tbody>
               </table>
             </div>
             <p className="muted" style={{ fontSize: 13 }}>
-              Prediction {p.locked ? "locked at tip-off" : "updates until tip-off"} · last computed {etDateTime(p.updated_at)} · model {p.model_version} ·
-              Elo {g.away.abbr} {Number(p.away_elo).toFixed(0)}, {g.home.abbr} {Number(p.home_elo).toFixed(0)}
+              {p.locked ? "Locked at tip-off" : "Updates until tip-off"} · computed {etDateTime(p.updated_at)} · {p.model_version} · Elo {A} {Number(p.away_elo).toFixed(0)}, {H} {Number(p.home_elo).toFixed(0)}
             </p>
           </div>
+        )}
 
-          <div className="section">
-            <h2>Line movement</h2>
-            {odds.length === 0 ? (
-              <p className="muted">No lines captured yet.</p>
-            ) : (
-              <div className="tablewrap" style={{ marginTop: 12 }}>
-                <table>
-                  <thead><tr><th>Captured</th><th className="num">{g.home.abbr} spread</th><th className="num">Total</th><th className="num">{g.away.abbr} ML</th><th className="num">{g.home.abbr} ML</th></tr></thead>
-                  <tbody>
-                    {first?.open_spread_home != null && (
-                      <tr className="muted"><td>Open</td><td className="num">{signed(first.open_spread_home)}</td><td className="num">{first.open_total ?? "—"}</td><td className="num">{american(first.open_ml_away)}</td><td className="num">{american(first.open_ml_home)}</td></tr>
-                    )}
-                    {[...odds].reverse().map((o) => (
-                      <tr key={o.id}><td>{etDateTime(o.captured_at)}</td><td className="num">{signed(o.spread_home)}</td><td className="num">{o.total ?? "—"}</td><td className="num">{american(o.ml_away)}</td><td className="num">{american(o.ml_home)}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="muted" style={{ fontSize: 13 }}>Source: {odds[0]?.provider ?? "DraftKings"} via ESPN.</p>
-          </div>
-        </>
-      )}
+        <div className="section">
+          <h3>Line movement</h3>
+          {odds.length === 0 ? <p className="muted">No lines captured yet.</p> : (
+            <div className="tablewrap" style={{ marginTop: 8 }}>
+              <table>
+                <thead><tr><th>Captured</th><th className="num">{H} spread</th><th className="num">Total</th><th className="num">{A} ML</th><th className="num">{H} ML</th></tr></thead>
+                <tbody>
+                  {first?.open_spread_home != null && (
+                    <tr className="muted"><td>Open</td><td className="num">{signed(first.open_spread_home)}</td><td className="num">{first.open_total ?? "—"}</td><td className="num">{american(first.open_ml_away)}</td><td className="num">{american(first.open_ml_home)}</td></tr>
+                  )}
+                  {[...odds].reverse().map((o) => (
+                    <tr key={o.id}><td>{etDateTime(o.captured_at)}</td><td className="num">{signed(o.spread_home)}</td><td className="num">{o.total ?? "—"}</td><td className="num">{american(o.ml_away)}</td><td className="num">{american(o.ml_home)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="muted" style={{ fontSize: 13 }}>Source: {odds[0]?.provider ?? "DraftKings"} via ESPN.</p>
+        </div>
+      </details>
     </>
   );
 }
