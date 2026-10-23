@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { q, oddsFor, injuriesFor, GAME_SELECT, MODEL, type Game, type Injury } from "@/lib/db";
+import { q, oddsFor, injuriesFor, GAME_SELECT, MODEL, type Game, type Injury, type Team } from "@/lib/db";
+import { recentGames, teamForm, headToHead, whyLines, teamMap, type Form } from "@/lib/form";
+import { Strip } from "../../GameRow";
 import { american, etDateTime, etLongDay, etTime, pct, signed } from "@/lib/format";
 
 export const revalidate = 60;
@@ -15,6 +17,31 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const hp = p ? Number(p.home_win_prob) : null;
   const first = odds.length ? odds[odds.length - 1] : null;
   const injuries: Injury[] = g.completed ? [] : await injuriesFor([g.away.id, g.home.id]).catch((): Injury[] => []);
+  const [recent, teams, ratings] = await Promise.all([
+    recentGames([g.away.id, g.home.id], g.season - 2).catch(() => []),
+    q<Team[]>("teams?select=*", 3600).catch((): Team[] => []),
+    q<{ team_id: string; elo: number }[]>("team_ratings?select=team_id,elo&order=elo.desc", 300).catch((): { team_id: string; elo: number }[] => []),
+  ]);
+  const abbr = teamMap(teams);
+  const fa = teamForm(g.away.id, recent, g.start_time, g.season, abbr);
+  const fh = teamForm(g.home.id, recent, g.start_time, g.season, abbr);
+  const h2h = headToHead(g.away.id, g.home.id, recent, g.start_time, 5);
+  const why = whyLines(g, p, fa, fh, h2h, injuries);
+  const rank = (id: string) => { const i = ratings.findIndex((r) => r.team_id === id); return i >= 0 ? i + 1 : null; };
+  const rec = (x: { w: number; l: number }) => `${x.w}-${x.l}`;
+  const sgn = (x: number) => `${x >= 0 ? "+" : ""}${x.toFixed(1)}`;
+  const rows: [string, (f: Form, id: string) => React.ReactNode][] = [
+    ["Last 5", (f) => <Strip f={f} />],
+    ["Record (this season)", (f) => rec(f.season)],
+    ["Home / away", (f) => `${rec(f.home)} / ${rec(f.away)}`],
+    ["Streak", (f) => f.streak ?? "—"],
+    ["Last 10", (f) => (f.l10 ? rec(f.l10) : "—")],
+    ["Points for / against (L10)", (f) => (f.l10 ? `${f.l10.ppg.toFixed(1)} / ${f.l10.oppg.toFixed(1)}` : "—")],
+    ["Avg margin (L10)", (f) => (f.l10 ? sgn(f.l10.margin) : "—")],
+    ["Avg game total (L10)", (f) => (f.l10 ? f.l10.total.toFixed(1) : "—")],
+    ["Rest", (f) => (f.restDays == null ? "—" : f.b2b ? "Back-to-back" : `${f.restDays} day${f.restDays === 1 ? "" : "s"}`)],
+    ["Power rank (Elo)", (_f, id) => { const r = rank(id); return r ? `#${r} of 30` : "—"; }],
+  ];
 
   return (
     <>
@@ -42,6 +69,71 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      {why.length > 0 && (
+        <div className="callout why">
+          <div className="kicker" style={{ marginBottom: 6 }}>Why the model sees it this way</div>
+          <ul>{why.map((w, i) => <li key={i}>{w}</li>)}</ul>
+        </div>
+      )}
+
+      <div className="section">
+        <h2>Matchup</h2>
+        <div className="tablewrap" style={{ marginTop: 12 }}>
+          <table className="cmp">
+            <thead><tr><th></th><th>{g.away.abbr}</th><th>{g.home.abbr}</th></tr></thead>
+            <tbody>
+              {rows.map(([label, fn]) => (
+                <tr key={label}><td className="muted">{label}</td><td className="num">{fn(fa, g.away.id)}</td><td className="num">{fn(fh, g.home.id)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted" style={{ fontSize: 13 }}>Faded results are from last season. Against-the-spread records start once Stakeman has a few weeks of saved lines.</p>
+      </div>
+
+      <div className="section grid2">
+        {[{ t: g.away, f: fa }, { t: g.home, f: fh }].map(({ t, f }) => (
+          <div key={t.id}>
+            <h3>{t.short_name}: last 10</h3>
+            {f.last.length === 0 ? <p className="muted">No games yet.</p> : (
+              <table style={{ marginTop: 8 }}>
+                <tbody>
+                  {f.last.map((r) => (
+                    <tr key={r.id} className={r.season !== g.season ? "muted" : ""}>
+                      <td className="num" style={{ width: 64 }}>{new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }).format(new Date(r.date))}</td>
+                      <td>{r.home ? "vs" : "@"} {abbr(r.oppId)}</td>
+                      <td className="num"><b className={`res ${r.win ? "win" : "loss"}`} style={{ marginLeft: 0 }}>{r.win ? "W" : "L"}</b> {r.pf}-{r.pa}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="section">
+        <h2>Head to head</h2>
+        {h2h.length === 0 ? <p className="muted">No meetings in the last two seasons.</p> : (
+          <div className="tablewrap" style={{ marginTop: 12 }}>
+            <table>
+              <tbody>
+                {h2h.map((x) => {
+                  const hw = x.home_score > x.away_score;
+                  return (
+                    <tr key={x.id}>
+                      <td className="num" style={{ width: 110 }}>{new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" }).format(new Date(x.start_time))}</td>
+                      <td>{abbr(x.away_team_id)} @ {abbr(x.home_team_id)}</td>
+                      <td className="num">{x.away_score}–{x.home_score}</td>
+                      <td><b>{hw ? abbr(x.home_team_id) : abbr(x.away_team_id)}</b> won by {Math.abs(x.home_score - x.away_score)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {!g.completed && (
         <div className="section">

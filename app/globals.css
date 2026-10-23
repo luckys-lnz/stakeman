@@ -8,6 +8,7 @@
   --signal: #0d6435;
   --signal-bg: #dcefe2;
   --loss: #9e2f24;
+  --loss-bg: #f3dcd7;
   --bar: #15140f;
   --bar-2: #b9b1a0;
   --font-display: var(--f-display), "Arial Narrow", sans-serif;
@@ -26,6 +27,7 @@
     --signal: #67d394;
     --signal-bg: #173525;
     --loss: #ef8a7c;
+    --loss-bg: #3a1f1b;
     --bar: #efe9dc;
     --bar-2: #555046;
     color-scheme: dark;
@@ -96,6 +98,18 @@ p { max-width: 68ch; }
 .res.push { color: var(--muted); }
 .final { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
 
+.meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-weight: 500; margin-left: 6px; }
+.meta .b2b { color: var(--loss); font-weight: 700; }
+.forms { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; }
+.forms > div { display: flex; align-items: center; gap: 5px; }
+.forms > div > b { font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
+.strip { display: inline-flex; gap: 2px; align-items: center; }
+.sw { display: inline-flex; align-items: center; gap: 2px; }
+.fr { display: inline-grid; place-items: center; width: 16px; height: 16px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+.fr.w { background: var(--signal-bg); color: var(--signal); }
+.fr.l { background: var(--loss-bg); color: var(--loss); }
+.fr.old { opacity: 0.55; }
+.sep { font-style: normal; color: var(--muted); margin: 0 1px; }
 .injs { margin-top: 8px; display: grid; gap: 2px; }
 .inj { font-size: 12px; color: var(--muted); line-height: 1.35; }
 .inj b { color: var(--ink); font-weight: 600; margin-right: 2px; }
@@ -120,6 +134,11 @@ td.num, th.num { text-align: right; }
 .cal .act { position: absolute; top: 2px; bottom: 2px; left: 0; background: var(--bar); }
 
 .callout { background: var(--card); border: 1px solid var(--rule); padding: 14px 16px; font-size: 14px; }
+
+.why ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+.why li { max-width: 80ch; }
+.cmp td:first-child { width: 42%; }
+.cmp th:not(:first-child), .cmp td:not(:first-child) { text-align: left; }
 
 .foot { border-top: 2px solid var(--rule-strong); margin-top: 48px; padding: 18px 0 40px; font-size: 12px; color: var(--muted); }
 .foot p { margin: 4px 0; max-width: none; }

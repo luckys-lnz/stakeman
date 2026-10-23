@@ -57,8 +57,12 @@ Deno.serve(async (req) => {
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 100), 200);
   const minSeason = Number(url.searchParams.get("season") ?? 2024);
   // next completed games without a summary
-  const { data: done } = await sb.from("summary_fetch").select("game_id").eq("ok", true);
-  const doneSet = new Set((done ?? []).map((r: any) => r.game_id));
+  const doneSet = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data } = await sb.from("summary_fetch").select("game_id").eq("ok", true).order("game_id").range(from, from + 999);
+    for (const r of data ?? []) doneSet.add(r.game_id);
+    if (!data || data.length < 1000) break;
+  }
   const todo: any[] = [];
   for (let from = 0; todo.length < limit; from += 1000) {
     const { data, error } = await sb.from("games").select("id,home_team_id,away_team_id")

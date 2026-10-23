@@ -1,5 +1,6 @@
 import GameRow from "./GameRow";
-import { gamesBetween, injuriesFor, groupInjuries, q, MODEL, type Game, type Injury, type Metric } from "@/lib/db";
+import { gamesBetween, injuriesFor, groupInjuries, q, MODEL, type Game, type Injury, type Metric, type Team } from "@/lib/db";
+import { recentGames, teamForm, teamMap } from "@/lib/form";
 import { etDay, etLongDay, pct } from "@/lib/format";
 
 export const revalidate = 60;
@@ -14,6 +15,16 @@ export default async function Home() {
     ),
   ]);
 
+  const season = Math.max(...games.map((g) => g.season), 0);
+  const [recent, teams] = await Promise.all([
+    recentGames(games.flatMap((g) => [g.home.id, g.away.id]), season - 1).catch(() => []),
+    q<Team[]>("teams?select=*", 3600).catch((): Team[] => []),
+  ]);
+  const abbr = teamMap(teams);
+  const formFor = (g: Game) => ({
+    away: teamForm(g.away.id, recent, g.start_time, g.season, abbr),
+    home: teamForm(g.home.id, recent, g.start_time, g.season, abbr),
+  });
   const inj = groupInjuries(await injuriesFor(games.flatMap((g) => [g.home.id, g.away.id])).catch((): Injury[] => []));
   const today = etDay(new Date(now).toISOString());
   const byDay = new Map<string, Game[]>();
@@ -51,7 +62,7 @@ export default async function Home() {
             <h2>{d === today ? "Today" : etLongDay(gs[0].start_time).split(",")[0]}</h2>
             <span className="kicker">{etLongDay(gs[0].start_time)} · {gs.length} games</span>
           </div>
-          {gs.map((g) => <GameRow key={g.id} g={g} injuries={[...(inj.get(g.away.id) ?? []), ...(inj.get(g.home.id) ?? [])]} />)}
+          {gs.map((g) => <GameRow key={g.id} g={g} form={formFor(g)} injuries={[...(inj.get(g.away.id) ?? []), ...(inj.get(g.home.id) ?? [])]} />)}
         </section>
       ))}
     </>

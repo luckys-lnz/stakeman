@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Game, Injury } from "@/lib/db";
 import { MODEL } from "@/lib/db";
 import { american, etTime, pct, signed } from "@/lib/format";
+import type { Form } from "@/lib/form";
 
 function Res({ r }: { r: string | null }) {
   if (!r) return null;
@@ -24,7 +25,33 @@ function InjLine({ abbr, list }: { abbr: string; list: Injury[] }) {
   );
 }
 
-export default function GameRow({ g, injuries = [] }: { g: Game; injuries?: Injury[] }) {
+export function Strip({ f }: { f: Form }) {
+  if (!f.strip.length) return null;
+  const cur = f.strip[f.strip.length - 1].season;
+  return (
+    <span className="strip" aria-label={`Last ${f.strip.length}: ${f.strip.map((s) => s.r).join("")}`}>
+      {f.strip.map((s, i) => (
+        <span key={i} className="sw">
+          {i > 0 && f.strip[i - 1].season !== s.season && <i className="sep" title="Season boundary">|</i>}
+          <b className={`fr ${s.r === "W" ? "w" : "l"} ${s.season !== cur ? "old" : ""}`} title={s.label}>{s.r}</b>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function Meta({ f }: { f: Form }) {
+  const gp = f.season.w + f.season.l;
+  return (
+    <span className="meta">
+      {gp > 0 ? `${f.season.w}-${f.season.l}` : "0-0"}
+      {f.streak ? ` · ${f.streak}` : ""}
+      {f.b2b ? <b className="b2b"> · B2B</b> : null}
+    </span>
+  );
+}
+
+export default function GameRow({ g, injuries = [], form }: { g: Game; injuries?: Injury[]; form?: { away: Form; home: Form } }) {
   const p = g.predictions.find((x) => x.model_version === MODEL);
   const hp = p ? Number(p.home_win_prob) : null;
   const live = g.state === "in";
@@ -46,6 +73,7 @@ export default function GameRow({ g, injuries = [] }: { g: Game; injuries?: Inju
         <div className={`team ${hp !== null && hp < 0.5 ? "fav" : ""}`}>
           <img src={g.away.logo} alt="" />
           {g.away.short_name}
+          {form && <Meta f={form.away} />}
           <span className="prob">{hp === null ? "—" : pct(1 - hp)}</span>
         </div>
         <div className="probbar" aria-hidden>
@@ -54,8 +82,15 @@ export default function GameRow({ g, injuries = [] }: { g: Game; injuries?: Inju
         <div className={`team ${hp !== null && hp >= 0.5 ? "fav" : ""}`}>
           <img src={g.home.logo} alt="" />
           {g.home.short_name}
+          {form && <Meta f={form.home} />}
           <span className="prob">{hp === null ? "—" : pct(hp)}</span>
         </div>
+        {form && (
+          <div className="forms">
+            <div><b>{g.away.abbr}</b> <Strip f={form.away} /></div>
+            <div><b>{g.home.abbr}</b> <Strip f={form.home} /></div>
+          </div>
+        )}
         {injuries.length > 0 && (
           <div className="injs">
             <InjLine abbr={g.away.abbr} list={injuries.filter((i) => i.team_id === g.away.id)} />
