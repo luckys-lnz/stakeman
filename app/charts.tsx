@@ -24,30 +24,34 @@ export function ProbSplit({ away, home, rows }: { away: string; home: string; ro
   );
 }
 
-/** A number line with labelled markers (market line, model view, reference averages). */
+/** A number line: market (square) and model (dot) are labelled on the line; reference marks are rings explained in a key. */
 export function NumberLine({ min, max, marks, left, right }: {
   min: number; max: number; left?: string; right?: string;
   marks: { v: number; label: string; kind: "market" | "model" | "ref" }[];
 }) {
   const x = (v: number) => `${clamp(((v - min) / (max - min)) * 100, 0, 100)}%`;
   const mk = marks.filter((m) => m.kind !== "ref");
+  const refs = marks.filter((m) => m.kind === "ref");
   const lo = Math.min(...mk.map((m) => m.v)), hi = Math.max(...mk.map((m) => m.v));
-  const ticks = [min, (min + max) / 2, max];
+  const n = (v: number) => Number(v.toFixed(1));
   return (
     <div className="nline">
       <div className="ntrack">
         {mk.length === 2 && <span className="ngap" style={{ left: x(lo), width: `calc(${x(hi)} - ${x(lo)})` }} />}
-        {marks.map((m, i) => (
-          <span key={i} className={`nmark ${m.kind} ${i % 2 ? "below" : "above"}`} style={{ left: x(m.v) }} title={`${m.label}: ${m.v.toFixed(1)}`}>
+        {refs.map((m, i) => (
+          <span key={`r${i}`} className="nmark ref" style={{ left: x(m.v) }} title={`${m.label}: ${n(m.v)}`}><i /></span>
+        ))}
+        {mk.map((m, i) => (
+          <span key={i} className={`nmark ${m.kind} ${m.kind === "market" ? "above" : "below"}`} style={{ left: x(m.v) }} title={`${m.label}: ${n(m.v)}`}>
             <i />
-            <em>{m.label}<b>{Number(m.v.toFixed(1))}</b></em>
+            <em>{m.label}<b>{n(m.v)}</b></em>
           </span>
         ))}
       </div>
-      <div className="nticks">
-        {ticks.map((t, i) => <span key={i} style={{ left: x(t) }}>{Number(t.toFixed(1))}</span>)}
-      </div>
-      {(left || right) && <div className="nends"><span>{left}</span><span>{right}</span></div>}
+      <div className="nends"><span>{n(min)}{left ? ` · ${left}` : ""}</span><span>{right ? `${right} · ` : ""}{n(max)}</span></div>
+      {refs.length > 0 && (
+        <div className="nkey">{refs.map((m, i) => <span key={i}><i /> {m.label} {n(m.v)}</span>)}</div>
+      )}
     </div>
   );
 }

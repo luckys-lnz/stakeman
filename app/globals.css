@@ -213,9 +213,9 @@ td.num, th.num { text-align: right; }
 .nmark.above em { bottom: 18px; }
 .nmark.below em { top: 18px; }
 .nmark.ref em b { font-size: 11px; color: var(--muted); }
-.nticks { position: relative; height: 40px; margin: 0 6px; }
-.nticks span { position: absolute; top: 26px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
-.nends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.nkey { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.nkey i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--muted); vertical-align: -1px; }
+.nends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 44px; font-family: var(--font-mono); }
 
 .grid2.tight { gap: 20px; }
 .mhead { font-size: 13px; margin-bottom: 6px; }
