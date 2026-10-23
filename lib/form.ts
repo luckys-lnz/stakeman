@@ -127,7 +127,7 @@ export function whyLines(g: Game, p: Prediction | undefined, away: Form, home: F
   }
   const gpA = away.season.w + away.season.l, gpH = home.season.w + home.season.l;
   if (Math.min(gpA, gpH) < 5)
-    out.push(`Early season: ${A} has played ${gpA} and ${H} ${gpH} games this season, so last season still carries a lot of weight in the ratings and form.`);
+    out.push(`Early season: ${A} has played ${gpA} game${gpA === 1 ? "" : "s"} and ${H} ${gpH} this season, so last season still carries a lot of weight in the ratings and form.`);
   // rest
   if (away.b2b && !home.b2b) out.push(`${A} is on the second night of a back-to-back; ${H} has ${home.restDays ?? "?"} day(s) of rest.`);
   else if (home.b2b && !away.b2b) out.push(`${H} is on the second night of a back-to-back; ${A} has ${away.restDays ?? "?"} day(s) of rest.`);

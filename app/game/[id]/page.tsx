@@ -27,7 +27,8 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const fh = teamForm(g.home.id, recent, g.start_time, g.season, abbr);
   const h2h = headToHead(g.away.id, g.home.id, recent, g.start_time, 5);
   const why = whyLines(g, p, fa, fh, h2h, injuries);
-  const rank = (id: string) => { const i = ratings.findIndex((r) => r.team_id === id); return i >= 0 ? i + 1 : null; };
+  const nba = ratings.filter((r) => /^([1-9]|[12][0-9]|30)$/.test(r.team_id)); // the 30 franchises (excludes All-Star squads)
+  const rank = (id: string) => { const i = nba.findIndex((r) => r.team_id === id); return i >= 0 ? i + 1 : null; };
   const rec = (x: { w: number; l: number }) => `${x.w}-${x.l}`;
   const sgn = (x: number) => `${x >= 0 ? "+" : ""}${x.toFixed(1)}`;
   const rows: [string, (f: Form, id: string) => React.ReactNode][] = [

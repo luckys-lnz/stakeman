@@ -68,6 +68,8 @@ async function ingest(query: string) {
     const h = c.competitors.find((x: any) => x.homeAway === "home");
     const a = c.competitors.find((x: any) => x.homeAway === "away");
     if (!h || !a) continue;
+    // only the 30 NBA franchises (ESPN ids 1-30): skips All-Star and exhibition squads
+    if (![h.team.id, a.team.id].every((id: string) => /^([1-9]|[12][0-9]|30)$/.test(String(id)))) continue;
     for (const t of [h.team, a.team]) {
       teams.set(t.id, { id: t.id, abbr: t.abbreviation, name: t.displayName, short_name: t.shortDisplayName ?? t.name, logo: t.logo, color: t.color, updated_at: new Date().toISOString() });
     }
