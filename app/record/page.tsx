@@ -38,6 +38,7 @@ export default async function Record() {
   const maxAbs = Math.max(1, ...months.map(([, v]) => Math.abs(v)));
   const name = { ml: "Moneyline", spread: "Spread", total: "Total" } as const;
   const fmtMonth = (k: string) => new Date(k + "-15").toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  const research = metrics.find((m) => m.scope === "research" && m.label === "injury")?.detail as any;
   const betVerdict = betAll.n === 0 ? null
     : betAll.u > 0 ? `Profitable in the backtest: ${units(betAll.u)} over ${betAll.n} picks (${(betAll.u / betAll.n * 100).toFixed(1)}% return per pick). Not yet statistically proven: swings month to month are large, so expect losing stretches.`
     : `Not profitable in the backtest: ${units(betAll.u)} over ${betAll.n} picks (${(betAll.u / betAll.n * 100).toFixed(1)}% per pick). Treat picks as information, not a money-maker, until the live record says otherwise.`;
@@ -65,6 +66,40 @@ export default async function Record() {
           </div>
           <p className="vnote">Totals were dropped in v1.4: the same test showed totals picks losing 32 units (−9.8% per bet) over 328 picks.</p>
           {det && <p className="vnote">Backtest: today&apos;s pick rules applied to {det.games_with_lines} past games ({det.from ? fmtMonth(det.from.slice(0, 7)) : ""}–{det.to ? fmtMonth(det.to.slice(0, 7)) : ""}) against DraftKings closing lines, 1 unit per pick, −110 on spreads and totals. Each game uses only information from before it. Injury holds aren&apos;t applied (no historical pre-game reports).</p>}
+        </section>
+      )}
+
+      {research && (
+        <section className="chart">
+          <h3>Is it skill or luck?</h3>
+          <p className="cverdict">A picker with no edge at these prices does this well in about {Math.round(research.luck_share_random_this_good * 100)}% of seasons, roughly 1 in {Math.round(1 / research.luck_share_random_this_good)}.</p>
+          <p className="csub" style={{ marginTop: 0 }}>Promising, not proven. The live record below is the real test: every pick is locked before tip-off and graded after the game.</p>
+        </section>
+      )}
+
+      {research && (
+        <section className="chart">
+          <h3>What injuries did to the picks</h3>
+          <p className="cverdict">Picks on short-handed teams were the most profitable. The market tends to overreact to star absences.</p>
+          <div className="edges">
+            {[
+              { label: "On a team missing a key player", d: research.picks_on_shorthanded_team },
+              { label: "No key absence either side", d: research.picks_no_key_absence },
+              { label: "Against a team missing a key player", d: research.picks_against_shorthanded_team },
+            ].map(({ label, d }) => {
+              const max = Math.max(Math.abs(research.picks_on_shorthanded_team.units), Math.abs(research.picks_against_shorthanded_team.units), Math.abs(research.picks_no_key_absence.units));
+              return (
+                <div className="urow" key={label}>
+                  <span className="ulabel">{label}<small>{d.w}–{d.l}</small></span>
+                  <div className="utrack">
+                    <span className={`ubar ${d.units >= 0 ? "pos" : "neg"}`} style={{ width: `${(Math.abs(d.units) / max) * 50}%`, [d.units >= 0 ? "left" : "right"]: "50%" } as React.CSSProperties} />
+                  </div>
+                  <span className="uval">{units(d.units)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="cfoot">Key player = 28+ minutes and 15+ points a game, missing a game after playing in the team&apos;s recent games. Adjusting the model for injuries made its predictions more accurate (Brier {research.brier_base} → {research.brier_injury_adjusted}) but its picks worse ({units(research.adjusting_picks_for_injuries_units)}), because it then agreed with the market. So v1.5 shows the injury-adjusted line for context and keeps picks on the tested rules.</p>
         </section>
       )}
 

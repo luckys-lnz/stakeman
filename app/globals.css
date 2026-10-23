@@ -294,3 +294,14 @@ details.more .section h3 { margin-bottom: 4px; }
 .mcol2 { display: grid; grid-template-rows: auto 1fr 1fr auto; min-width: 44px; }
 .mval { font-family: var(--font-mono); font-size: 10px; text-align: center; color: var(--muted); padding-bottom: 2px; }
 .mlab2 { font-size: 10px; text-align: center; color: var(--muted); padding-top: 4px; }
+
+.urow { display: grid; grid-template-columns: 220px 1fr 70px; gap: 10px; align-items: center; }
+.ulabel { font-size: 13px; display: grid; }
+.ulabel small { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.utrack { position: relative; height: 16px; border-left: 0; }
+.utrack::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--rule-strong); }
+.ubar { position: absolute; top: 0; bottom: 0; }
+.ubar.pos { background: var(--win-c); border-radius: 0 4px 4px 0; }
+.ubar.neg { background: var(--lose-c); border-radius: 4px 0 0 4px; }
+.uval { font-family: var(--font-mono); font-size: 12px; text-align: right; }
+@media (max-width: 760px) { .urow { grid-template-columns: 1fr 60px; } .utrack { grid-column: 1 / -1; grid-row: 2; } }

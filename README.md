@@ -18,7 +18,7 @@ ESPN scoreboard (free, no key)          every 15 min (pg_cron → pg_net)
                                            Next.js site (this repo, Vercel)
 ```
 
-- **Model:** `stakeman-elo-v1.3` — Elo (K=20, home court 50 Elo ≈ 1.8 pts, 40% regression between seasons, MOV multiplier) + EWMA points model for totals. Picks use a 40/60 model/market blend; big model–market gaps are flagged "check news" instead of picked. Injury guard: a key player (28+ min & 15+ pts/g) newly Out or Day-To-Day (reported ≤21 days ago) withholds picks on that team and overs in that game.
+- **Model:** `stakeman-elo-v1.5` — Elo (K=20, home court 50 Elo ≈ 1.8 pts, 40% regression between seasons, MOV multiplier) + EWMA points model for totals. Picks use a 40/60 model/market blend; big model–market gaps are flagged "check news" instead of picked. No totals picks (lost 9.8%/bet vs closing lines). No injury hold: picks on short-handed teams were the most profitable in testing; injury-adjusted lines are shown for context.
 - **Backtest (walk-forward, 2024-25 + 2025-26, 2,666 games):** 67.1% winners, Brier 0.209, log loss 0.606, calibrated within ~2 pts per bin.
 - **Params** live in `model_versions.params`; new params = new version row, so the record per version stays honest.
 

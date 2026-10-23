@@ -3,7 +3,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const MODEL = "stakeman-elo-v1.4";
+const MODEL = "stakeman-elo-v1.5";
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
 const FIRST_SEASON = 2024; // ESPN season.year (2023-24) = warm-up season
 

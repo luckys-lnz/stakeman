@@ -39,6 +39,11 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   const edgeRows = edges(fa, fh, rank(g.away.id), rank(g.home.id));
   const edgeA = edgeRows.filter((r) => r.edge === "a").length, edgeH = edgeRows.filter((r) => r.edge === "h").length;
   const keyOut = injuries.filter((i) => i.key);
+  // injury-adjusted view (information only): 0.078 pts of margin per point-per-game a fresh absence takes away
+  const K_INJ = 0.0783, fresh = Date.now() - 21 * 86400e3;
+  const outFresh = injuries.filter((i) => i.status === "Out" && Number(i.mpg ?? 0) >= 15 && i.reported_at && new Date(i.reported_at).getTime() >= fresh);
+  const lostPts = (tid: string) => outFresh.filter((i) => i.team_id === tid).reduce((s, i) => s + Number(i.ppg ?? 0), 0);
+  const injAdj = K_INJ * (lostPts(g.away.id) - lostPts(g.home.id)); // + helps home
   const gpA = fa.season.w + fa.season.l, gpH = fh.season.w + fh.season.l;
 
   // chart verdicts — one line each
@@ -48,6 +53,10 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
     : Math.abs(hp - mh) < 0.03 ? `Model and market agree: ${hp >= 0.5 ? H : A} is about ${pct(Math.max(hp, 1 - hp))} to win.`
     : `Model is higher on ${hp > mh ? H : A} than the market (${pct(hp > mh ? hp : 1 - hp)} vs ${pct(hp > mh ? mh : 1 - mh)}).`;
   const ms = p?.market_spread_home != null ? Number(p.market_spread_home) : null, mod = p ? -Number(p.exp_margin) : null;
+  const modInj = mod != null ? mod - injAdj : null; // home spread view after injuries
+  const injNote = mod != null && Math.abs(injAdj) >= 0.5
+    ? `Counting fresh absences (${outFresh.map((i) => i.name.split(" ").slice(-1)[0]).join(", ")}), the model's line moves ${Math.abs(injAdj).toFixed(1)} pts toward ${injAdj > 0 ? H : A}: ${H} ${(modInj! > 0 ? "+" : "") + modInj!.toFixed(1)}. Shown for context; picks use the tested rules.`
+    : null;
   const spreadVerdict = ms == null || mod == null ? null
     : Math.abs(mod - ms) < 1.5 ? `Model and line within ${Math.abs(mod - ms).toFixed(1)} pts: no edge.`
     : `Model rates ${mod < ms ? H : A} ${Math.abs(mod - ms).toFixed(1)} pts better than the line does.`;
@@ -119,7 +128,9 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           <h3>Spread: by how much?</h3>
           <p className="cverdict">{spreadVerdict}</p>
           <NumberLine min={-sSpan} max={sSpan} left={`${H} favored ←`} right={`→ ${A} favored`}
-            marks={[{ v: ms, label: `Line ${H}`, kind: "market" }, { v: mod, label: `Model ${H}`, kind: "model" }]} />
+            marks={[{ v: ms, label: `Line ${H}`, kind: "market" }, { v: mod, label: `Model ${H}`, kind: "model" },
+              ...(injNote && modInj != null ? [{ v: modInj, label: "Model with injuries", kind: "ref" as const }] : [])]} />
+          {injNote && <p className="cfoot">{injNote}</p>}
         </section>
       )}
 
