@@ -4,7 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const MODEL = "stakeman-elo-v1.5";
 const LAUNCH = "2026-10-23";           // first live slate
-const SITE = "stakeman-fawn.vercel.app";
+// No URLs in post text: X charges ~13x more for a post containing a link. The site is linked from the profile bio.
 const PICKS_LEAD_MIN = 60;             // post picks this long before the slate's first tip
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -95,8 +95,8 @@ function thread(head: string, lines: string[], tail: string) {
 
 function picksPost(slate: string, games: any[]) {
   const rows = pickRows(games.filter((g) => g.state === "pre"));
-  if (!rows.length) return [`Stakeman · ${label(slate)}\n\nNo picks today. The model found no edge big enough to bet on any game.\n\nEvery game's numbers: ${SITE}`];
-  return thread(`Stakeman picks · ${label(slate)}\n`, rows.map((r) => r.line), `Picks can change until tip-off. Final card and full record: ${SITE}`);
+  if (!rows.length) return [`Stakeman · ${label(slate)}\n\nNo picks today. The model found no edge big enough to bet on any game.\n\nEvery game's numbers: link in bio.`];
+  return thread(`Stakeman picks · ${label(slate)}\n`, rows.map((r) => r.line), `Picks can change until tip-off. Final card and full record: link in bio.`);
 }
 
 async function liveRecord() {
@@ -122,7 +122,7 @@ async function resultsPost(slate: string, games: any[]) {
   const w = rows.filter((r) => r.res === "win").length, l = rows.filter((r) => r.res === "loss").length, p = rows.filter((r) => r.res === "push").length;
   const u = rows.reduce((s, r) => s + (r.units ?? 0), 0);
   const lines = rows.map((r) => `${r.res === "win" ? "W" : r.res === "loss" ? "L" : "P"}  ${r.line.replace(/ ★+$/, "")}  ${r.res === "push" ? "push" : u2(r.units!)}`);
-  const tail = `Night: ${w}–${l}${p ? `–${p}` : ""} (${u2(u)})\nLive record: ${await liveRecord()}\n\nEvery pick, graded: ${SITE}/record`;
+  const tail = `Night: ${w}–${l}${p ? `–${p}` : ""} (${u2(u)})\nLive record: ${await liveRecord()}\n\nEvery pick is graded in public. Link in bio.`;
   return thread(`Stakeman results · ${label(slate)}\n`, lines, tail);
 }
 
