@@ -64,7 +64,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
       <section className="hero">
         <div className="kicker">NBA · 2026–27 regular season</div>
         <h1>Tonight&apos;s board</h1>
-        <p>Plays first: the bets where the model disagrees with the market by enough to matter. Every other game is a pass. Tap any game for the charts behind the call.</p>
+        <p>Plays come first: bets where the model disagrees with the betting market by enough to matter. Other games are marked pass, or check news when the gap is so large it probably reflects news the model can&apos;t see. Tap any game for the charts behind the call.</p>
       </section>
 
       <div className="statline">

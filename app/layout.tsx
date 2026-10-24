@@ -9,7 +9,7 @@ const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600", "
 
 export const metadata: Metadata = {
   title: "Stakeman — NBA model picks",
-  description: "Model-driven NBA probabilities for moneyline, spread and total. Every pick time-stamped and graded in public.",
+  description: "Model-driven NBA picks for moneyline and spread. Every pick locked at tip-off and graded in public.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -29,9 +29,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="wrap">{children}</main>
         <footer className="foot">
           <div className="wrap">
-            <p>Stakeman publishes model probabilities for information and entertainment. Not financial or betting advice. Past results do not guarantee future results.</p>
-            <p>21+ where legal. Gambling problem? Call or text 1-800-GAMBLER.</p>
-            <p>Lines shown are DraftKings consensus via ESPN at the time captured. Data refreshes every 15 minutes.</p>
+            <div className="foot-top">
+              <div className="foot-brand">
+                <div className="brand">Stake<span>man</span></div>
+                <p>NBA win and spread probabilities from a statistical model. Every pick is locked at tip-off and graded in public.</p>
+              </div>
+              <nav className="foot-nav" aria-label="Footer">
+                <div>
+                  <h4>Stakeman</h4>
+                  <Link href="/">Today&apos;s picks</Link>
+                  <Link href="/record">Record</Link>
+                  <Link href="/method">How it works</Link>
+                  <a href="https://x.com/stakemanpicks">@stakemanpicks on X</a>
+                </div>
+                <div>
+                  <h4>Legal</h4>
+                  <Link href="/terms">Terms of Use</Link>
+                  <Link href="/privacy">Privacy Policy</Link>
+                  <Link href="/responsible">Responsible play</Link>
+                </div>
+              </nav>
+            </div>
+            <div className="foot-legal">
+              <p><b>For information and entertainment only.</b> Stakeman is not a sportsbook and does not offer betting, financial or legal advice. No pick is guaranteed, and you can lose money betting. Past results do not guarantee future results.</p>
+              <p><b>21+.</b> Only bet where sports betting is legal for you. Gambling problem? Call or text <b>1-800-GAMBLER</b>.</p>
+              <p>Scores, injuries and lines come from ESPN; lines are DraftKings at the time captured and refresh about every 15 minutes. Stakeman is not affiliated with the NBA, ESPN, DraftKings or any sportsbook.</p>
+              <p>© {new Date().getFullYear()} Stakeman</p>
+            </div>
           </div>
         </footer>
       </body>

@@ -65,7 +65,7 @@ export default async function Record() {
             ))}
           </div>
           <p className="vnote">Totals were dropped in v1.4: the same test showed totals picks losing 32 units (−9.8% per bet) over 328 picks.</p>
-          {det && <p className="vnote">Backtest: today&apos;s pick rules applied to {det.games_with_lines} past games ({det.from ? fmtMonth(det.from.slice(0, 7)) : ""}–{det.to ? fmtMonth(det.to.slice(0, 7)) : ""}) against DraftKings closing lines, 1 unit per pick, −110 on spreads and totals. Each game uses only information from before it. Injury holds aren&apos;t applied (no historical pre-game reports).</p>}
+          {det && <p className="vnote">Backtest: today&apos;s pick rules applied to {det.games_with_lines} past games ({det.from ? fmtMonth(det.from.slice(0, 7)) : ""}–{det.to ? fmtMonth(det.to.slice(0, 7)) : ""}) against DraftKings closing lines, 1 unit per pick, at the moneyline price or −110 on spreads. Each game uses only information from before it.</p>}
         </section>
       )}
 
