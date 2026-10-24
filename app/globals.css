@@ -307,10 +307,11 @@ details.more .section h3 { margin-bottom: 4px; }
 .betform b { color: var(--ink); font-family: var(--font-mono); margin-left: 4px; }
 .csub { margin: -8px 0 14px; font-size: 13px; color: var(--muted); }
 
-.monthly { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(44px, 1fr); gap: 6px; height: 200px; overflow-x: auto; }
-.mcol2 { display: grid; grid-template-rows: auto 1fr 1fr auto; min-width: 44px; }
+.monthly { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; height: 210px; }
+.mcol2 { display: grid; grid-template-rows: auto 1fr 1fr auto; min-width: 0; }
 .mval { font-family: var(--font-mono); font-size: 10px; text-align: center; color: var(--muted); padding-bottom: 2px; }
-.mlab2 { font-size: 10px; text-align: center; color: var(--muted); padding-top: 4px; }
+.mlab2 { font-size: 10px; line-height: 1.25; text-align: center; color: var(--muted); padding-top: 4px; white-space: pre-line; }
+@media (max-width: 520px) { .monthly { gap: 3px; } .mval { font-size: 9px; letter-spacing: -0.02em; } }
 
 .urow { display: grid; grid-template-columns: 220px 1fr 70px; gap: 10px; align-items: center; }
 .ulabel { font-size: 13px; display: grid; }
@@ -322,3 +323,10 @@ details.more .section h3 { margin-bottom: 4px; }
 .ubar.neg { background: var(--lose-c); border-radius: 4px 0 0 4px; }
 .uval { font-family: var(--font-mono); font-size: 12px; text-align: right; }
 @media (max-width: 760px) { .urow { grid-template-columns: 1fr 60px; } .utrack { grid-column: 1 / -1; grid-row: 2; } }
+
+/* route loading state */
+.loading { display: grid; gap: 12px; padding: 48px 0; color: var(--muted); font-size: 14px; }
+.loading-bar { display: block; height: 3px; width: 100%; background: var(--rule); position: relative; overflow: hidden; }
+.loading-bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 35%; background: var(--signal); animation: sm-load 1s ease-in-out infinite; }
+@keyframes sm-load { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .loading-bar::after { animation: none; width: 100%; opacity: .5; } }

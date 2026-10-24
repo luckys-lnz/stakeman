@@ -99,7 +99,7 @@ export default async function Record() {
               );
             })}
           </div>
-          <p className="cfoot">Key player = 28+ minutes and 15+ points a game, missing a game after playing in the team&apos;s recent games. Adjusting the model for injuries made its predictions more accurate (Brier {research.brier_base} → {research.brier_injury_adjusted}) but its picks worse ({units(research.adjusting_picks_for_injuries_units)}), because it then agreed with the market. So v1.5 shows the injury-adjusted line for context and keeps picks on the tested rules.</p>
+          <p className="cfoot">Key absence = a player averaging 15+ minutes who played in at least 3 of his team&apos;s last 5 games, then missed this one. Adjusting the model for injuries made its predictions more accurate (Brier {research.brier_base} → {research.brier_injury_adjusted}) but its picks worse ({units(research.adjusting_picks_for_injuries_units)}), because it then agreed with the market. So v1.5 shows the injury-adjusted line for context and keeps picks on the tested rules.</p>
         </section>
       )}
 
@@ -110,10 +110,10 @@ export default async function Record() {
           <div className="monthly" role="img" aria-label={months.map(([k, v]) => `${fmtMonth(k)} ${units(v)}`).join(", ")}>
             {months.map(([k, v]) => (
               <div className="mcol2" key={k} title={`${fmtMonth(k)}: ${units(v)}`}>
-                <span className="mval">{units(v)}</span>
+                <span className="mval">{`${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}`}</span>
                 <div className="mup">{v > 0 && <span className="mb w" style={{ height: `${(v / maxAbs) * 100}%` }} />}</div>
                 <div className="mdown">{v < 0 && <span className="mb l" style={{ height: `${(-v / maxAbs) * 100}%` }} />}</div>
-                <span className="mlab2">{fmtMonth(k)}</span>
+                <span className="mlab2">{fmtMonth(k).replace(" ", "\n")}</span>
               </div>
             ))}
           </div>
@@ -129,7 +129,7 @@ export default async function Record() {
               <span>{k === "ml" ? "Moneyline" : k === "spread" ? "Spread" : "Total"} · {units(t[k].units)}</span>
             </div>
           ))}
-          <div className="stat"><b className="num">{live ? pct(live.accuracy, 1) : "—"}</b><span>Winners called · {live?.n ?? 0} games</span></div>
+          <div className="stat"><b className="num">{live ? pct(live.accuracy, 1) : "—"}</b><span>Winners called · {live?.n ?? 0} {live?.n === 1 ? "game" : "games"}</span></div>
         </div>
         {rows.length === 0 ? (
           <p className="muted">The live record starts with the first games graded tonight.</p>
